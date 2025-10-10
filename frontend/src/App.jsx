@@ -1,12 +1,12 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Login from "./components/login";
+import Login from "./pages/login";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 👇 Landing page shows Login */}
+        {/*Landing page shows Login */}
         <Route path="/" element={<Login />} />
 
         {/* Other routes can go here later */}

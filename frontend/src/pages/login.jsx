@@ -10,7 +10,7 @@ export default function Login() {
                 <img
                     src={BgSvg}
                     alt="Quiz Illustration"
-                    className="absolute inset-0 w-full h-full object-cover opacity-30"
+                    className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none select-none"
                 />
 
                 {/* Content overlays SVG */}
@@ -24,7 +24,7 @@ export default function Login() {
             <div className="flex-1 flex items-center justify-center bg-white">
                 <form
                     className="w-full max-w-md p-8 space-y-6 rounded-xl border bg-white
-               shadow-[20px_20px_40px_rgba(0,0,0,0.2),-10px_-10px_25px_rgba(255,255,255,0.5)]"
+                    shadow-[20px_20px_40px_rgba(0,0,0,0.2),-10px_-10px_25px_rgba(255,255,255,0.5)]"
                 >
                     <h2 className="text-3xl font-bold text-center mb-6">Login to Your Account</h2>
 
@@ -60,7 +60,6 @@ export default function Login() {
                     </button>
                 </form>
             </div>
-
         </div>
     );
 }
