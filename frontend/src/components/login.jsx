@@ -1,5 +1,5 @@
 import React from "react";
-import BgSvg from "../assets/bg.svg"; // adjust path according to your file structure
+import BgSvg from "../assets/Lbg.svg";
 
 export default function Login() {
     return (
