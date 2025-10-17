@@ -1,4 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { userAPI, quizAPI } from "../services/api";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar
@@ -92,18 +96,20 @@ const AddNewUserCard = ({ onAddClick }) => (
 );
 
 // New Component: Form for creating new users
-const UserCreationForm = ({ onCancel }) => {
+const UserCreationForm = ({ onCancel, onUserCreated }) => {
+    const toast = useToast();
     const [formData, setFormData] = useState({
-        role: 'Student', // Default role
-        firstName: '',
-        lastName: '',
+        role: 'student', // Default role
+        first_name: '',
+        last_name: '',
         email: '',
         password: '',
-        studentId: '', // Specific to student
+        student_id: '', // Specific to student
         department: '',
-        classYear: '1st Year'
+        class_year: '1st Year'
     });
     const [excelFile, setExcelFile] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -113,35 +119,102 @@ const UserCreationForm = ({ onCancel }) => {
         const file = e.target.files[0];
         setExcelFile(file);
         if (file) {
-            console.log("Reading file:", file.name);
+            toast.info(`File "${file.name}" selected. Bulk upload will be available soon.`);
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsSubmitting(true);
 
-        if (excelFile) {
-            // Logic for bulk upload success/failure
-            // Instead of alert, use a custom modal/message box
-            console.log(`Excel File '${excelFile.name}' uploaded. Creating users in bulk...`);
-        } else {
-            // Logic for single user creation
-            console.log("Submitting New User:", formData);
-            // Instead of alert, use a custom modal/message box
+        try {
+            if (excelFile) {
+                toast.warning("Bulk upload feature coming soon!");
+                setIsSubmitting(false);
+                return;
+            }
+
+            // Prepare user data for API
+            const userData = {
+                email: formData.email,
+                password: formData.password,
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                role: formData.role.toLowerCase(),
+                department: formData.department,
+                class_year: formData.class_year,
+            };
+
+            // Add student_id only for students
+            if (formData.role.toLowerCase() === 'student') {
+                userData.student_id = formData.student_id;
+            }
+
+            // Call API to create user
+            const response = await userAPI.createUser(userData);
+            
+            toast.success(`User ${response.first_name} ${response.last_name} created successfully!`);
+            
+            // Reset form
+            setFormData({
+                role: 'student',
+                first_name: '',
+                last_name: '',
+                email: '',
+                password: '',
+                student_id: '',
+                department: '',
+                class_year: '1st Year'
+            });
+
+            // Notify parent component
+            if (onUserCreated) {
+                onUserCreated(response);
+            }
+
+            // Close form after 1 second
+            setTimeout(() => {
+                onCancel();
+            }, 1000);
+            
+        } catch (error) {
+            console.error("Error creating user:", error);
+            if (error.status === 400) {
+                toast.error(error.data?.detail || "Email or Student ID already exists!");
+            } else if (error.status === 401 || error.status === 403) {
+                toast.error("You don't have permission to create users. Please login as admin.");
+            } else {
+                toast.error(error.message || "Failed to create user. Please try again.");
+            }
+        } finally {
+            setIsSubmitting(false);
         }
-
-        onCancel(); // Close form after submission
     };
 
-    const studentFields = formData.role === 'Student' && (
+    const studentFields = formData.role.toLowerCase() === 'student' && (
         <>
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Roll No. / Student ID (Required)</label>
-                <input type="text" name="studentId" value={formData.studentId} onChange={handleInputChange} required={formData.role === 'Student' && !excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <input 
+                    type="text" 
+                    name="student_id" 
+                    value={formData.student_id} 
+                    onChange={handleInputChange} 
+                    required={formData.role.toLowerCase() === 'student' && !excelFile} 
+                    disabled={isSubmitting}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                />
             </div>
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Class/Year</label>
-                <select name="classYear" value={formData.classYear} onChange={handleInputChange} required={formData.role === 'Student' && !excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                <select 
+                    name="class_year" 
+                    value={formData.class_year} 
+                    onChange={handleInputChange} 
+                    required={formData.role.toLowerCase() === 'student' && !excelFile} 
+                    disabled={isSubmitting}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                >
                     {['1st Year', '2nd Year', '3rd Year', '4th Year'].map(year => (
                         <option key={year} value={year}>{year}</option>
                     ))}
@@ -185,14 +258,20 @@ const UserCreationForm = ({ onCancel }) => {
 
             <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Or, Add Single User Manually</h3>
 
-            <form onSubmit={handleSubmit} className="space-y-6" disabled={excelFile}>
+            <form onSubmit={handleSubmit} className="space-y-6">
                 {/* User Role Selector */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
-                    {/* Reverted accent color */}
-                    <select name="role" value={formData.role} onChange={handleInputChange} required className="w-full p-3 border border-gray-300 rounded-lg bg-blue-50 ring-2 ring-blue-500 font-semibold" disabled={excelFile}>
-                        <option value="Teacher">Teacher / Professor</option>
-                        <option value="Student">Student</option>
+                    <select 
+                        name="role" 
+                        value={formData.role} 
+                        onChange={handleInputChange} 
+                        required 
+                        disabled={excelFile || isSubmitting}
+                        className="w-full p-3 border border-gray-300 rounded-lg bg-blue-50 ring-2 ring-blue-500 font-semibold disabled:bg-gray-100"
+                    >
+                        <option value="teacher">Teacher / Professor</option>
+                        <option value="student">Student</option>
                     </select>
                 </div>
 
@@ -200,19 +279,51 @@ const UserCreationForm = ({ onCancel }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                        <input type="text" name="firstName" value={formData.firstName} onChange={handleInputChange} required={!excelFile} disabled={excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                        <input 
+                            type="text" 
+                            name="first_name" 
+                            value={formData.first_name} 
+                            onChange={handleInputChange} 
+                            required={!excelFile} 
+                            disabled={excelFile || isSubmitting} 
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                        <input type="text" name="lastName" value={formData.lastName} onChange={handleInputChange} required={!excelFile} disabled={excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                        <input 
+                            type="text" 
+                            name="last_name" 
+                            value={formData.last_name} 
+                            onChange={handleInputChange} 
+                            required={!excelFile} 
+                            disabled={excelFile || isSubmitting} 
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
                     </div>
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Email (Login ID)</label>
-                        <input type="email" name="email" value={formData.email} onChange={handleInputChange} required={!excelFile} disabled={excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                        <input 
+                            type="email" 
+                            name="email" 
+                            value={formData.email} 
+                            onChange={handleInputChange} 
+                            required={!excelFile} 
+                            disabled={excelFile || isSubmitting} 
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
                     </div>
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
-                        <input type="password" name="password" value={formData.password} onChange={handleInputChange} required={!excelFile} disabled={excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                        <input 
+                            type="password" 
+                            name="password" 
+                            value={formData.password} 
+                            onChange={handleInputChange} 
+                            required={!excelFile} 
+                            disabled={excelFile || isSubmitting} 
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
                     </div>
                 </div>
 
@@ -220,7 +331,14 @@ const UserCreationForm = ({ onCancel }) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-6">
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                        <select name="department" value={formData.department} onChange={handleInputChange} required={!excelFile} disabled={excelFile} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <select 
+                            name="department" 
+                            value={formData.department} 
+                            onChange={handleInputChange} 
+                            required={!excelFile} 
+                            disabled={excelFile || isSubmitting} 
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                        >
                             <option value="">Select Department</option>
                             {['Computer Science Engg.', 'Artificial Intelligence', 'Mechanical Engineering', 'Electrical Engineering'].map(dept => (
                                 <option key={dept} value={dept}>{dept}</option>
@@ -232,12 +350,30 @@ const UserCreationForm = ({ onCancel }) => {
 
                 {/* Action Buttons */}
                 <div className="flex justify-end space-x-4 pt-4">
-                    <button type="button" onClick={onCancel} className="flex items-center px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-100 transition">
+                    <button 
+                        type="button" 
+                        onClick={onCancel} 
+                        disabled={isSubmitting}
+                        className="flex items-center px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
+                    >
                         <X size={20} className="mr-2" /> Cancel
                     </button>
                     {/* Reverted primary button color to blue */}
-                    <button type="submit" className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md">
-                        <Save size={20} className="mr-2" /> Create User
+                    <button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                                Creating...
+                            </>
+                        ) : (
+                            <>
+                                <Save size={20} className="mr-2" /> Create User
+                            </>
+                        )}
                     </button>
                 </div>
             </form>
@@ -245,21 +381,160 @@ const UserCreationForm = ({ onCancel }) => {
     );
 };
 
-// Component for listing existing users (Placeholder table)
-const UserList = ({ onAddClick }) => (
-    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-        <div className="flex justify-between items-center border-b pb-4 mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Existing Users</h2>
-            {/* Reverted primary button color to blue */}
-            <button onClick={onAddClick} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md">
-                <Plus size={20} className="mr-2" /> Add New User
-            </button>
+// Component for listing existing users
+const UserList = ({ onAddClick, refreshTrigger }) => {
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [filter, setFilter] = useState('all'); // all, teacher, student
+    const toast = useToast();
+
+    useEffect(() => {
+        fetchUsers();
+    }, [filter, refreshTrigger]);
+
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        try {
+            const response = await userAPI.getAllUsers();
+            setUsers(response);
+        } catch (error) {
+            console.error("Error fetching users:", error);
+            toast.error("Failed to load users");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDelete = async (userId, userName) => {
+        if (!window.confirm(`Are you sure you want to delete ${userName}?`)) {
+            return;
+        }
+
+        try {
+            await userAPI.deleteUser(userId);
+            toast.success(`User ${userName} deleted successfully`);
+            fetchUsers(); // Refresh list
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            toast.error(error.data?.detail || "Failed to delete user");
+        }
+    };
+
+    const filteredUsers = users.filter(user => {
+        if (filter === 'all') return true;
+        return user.role === filter;
+    });
+
+    return (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <div className="flex justify-between items-center border-b pb-4 mb-4">
+                <div>
+                    <h2 className="text-xl font-semibold text-gray-800">Existing Users ({filteredUsers.length})</h2>
+                    <div className="flex gap-2 mt-2">
+                        <button
+                            onClick={() => setFilter('all')}
+                            className={`px-3 py-1 rounded-lg text-sm transition ${
+                                filter === 'all'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            All Users
+                        </button>
+                        <button
+                            onClick={() => setFilter('teacher')}
+                            className={`px-3 py-1 rounded-lg text-sm transition ${
+                                filter === 'teacher'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            Teachers
+                        </button>
+                        <button
+                            onClick={() => setFilter('student')}
+                            className={`px-3 py-1 rounded-lg text-sm transition ${
+                                filter === 'student'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            Students
+                        </button>
+                    </div>
+                </div>
+                <button onClick={onAddClick} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md">
+                    <Plus size={20} className="mr-2" /> Add New User
+                </button>
+            </div>
+
+            {isLoading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Loading users...</p>
+                </div>
+            ) : filteredUsers.length === 0 ? (
+                <p className="text-center text-gray-500 py-12">
+                    No users found. Click "Add New User" to create one.
+                </p>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {filteredUsers.map((user) => (
+                                <tr key={user.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {user.first_name} {user.last_name}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                                            user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
+                                            'bg-green-100 text-green-800'
+                                        }`}>
+                                            {user.role}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.department || '-'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.student_id || '-'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }`}>
+                                            {user.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        {user.role !== 'admin' && (
+                                            <button
+                                                onClick={() => handleDelete(user.id, `${user.first_name} ${user.last_name}`)}
+                                                className="text-red-600 hover:text-red-900 transition"
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
-        <p className="text-center text-gray-500 py-12">
-            A table view of all Teachers and Students will be displayed here, with edit/delete options.
-        </p>
-    </div>
-);
+    );
+};
 
 // New Component: Unified Table for Teacher/Student Activity Lookup
 const UserActivityTable = ({ userType }) => {
@@ -374,8 +649,15 @@ const DetailedReportsTool = () => {
         const userQuery = `Analyze the following educational assessment report data and provide administrative recommendations:\n\n${mockData}`;
 
         // 3. Construct the API payload
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+        
+        if (!apiKey) {
+            setReportOutput("⚠️ Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file to enable AI-powered insights.");
+            setIsGenerating(false);
+            return;
+        }
+        
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
 
         const payload = {
             contents: [{ parts: [{ text: userQuery }] }],
@@ -406,7 +688,7 @@ const DetailedReportsTool = () => {
                 if (i < maxRetries - 1) {
                     await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000)); // Exponential backoff
                 } else {
-                    setReportOutput("Error: Could not fetch analysis from Gemini API.");
+                    setReportOutput("Error: Could not fetch analysis from Gemini API. Please check your API key and internet connection.");
                     setIsGenerating(false);
                     return;
                 }
@@ -494,9 +776,28 @@ const DetailedReportsTool = () => {
  * --- MAIN APPLICATION COMPONENT (Admin Dashboard) ---
  */
 export default function App() {
+    const navigate = useNavigate();
+    const { user, logout } = useAuth();
+    const toast = useToast();
+    
     // userViewMode can be 'list' (show table) or 'add' (show form)
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [userViewMode, setUserViewMode] = useState('list');
+    const [userListRefresh, setUserListRefresh] = useState(0);
+
+    // Handle logout
+    const handleLogout = () => {
+        if (window.confirm('Are you sure you want to logout?')) {
+            logout();
+            toast.success('Logged out successfully');
+            navigate('/');
+        }
+    };
+
+    // Handler when user is created successfully
+    const handleUserCreated = () => {
+        setUserListRefresh(prev => prev + 1); // Trigger refresh
+    };
 
     // NOTE: Removed 'Activity Tracker' and replaced with dedicated 'Teachers' and 'Students' links.
     const navItems = [
@@ -559,9 +860,15 @@ export default function App() {
             } // Added braces to fix no-case-declarations
             case 'Users':
                 return userViewMode === 'add' ? (
-                    <UserCreationForm onCancel={() => setUserViewMode('list')} />
+                    <UserCreationForm 
+                        onCancel={() => setUserViewMode('list')} 
+                        onUserCreated={handleUserCreated}
+                    />
                 ) : (
-                    <UserList onAddClick={() => setUserViewMode('add')} />
+                    <UserList 
+                        onAddClick={() => setUserViewMode('add')} 
+                        refreshTrigger={userListRefresh}
+                    />
                 );
             // NEW CASES for dedicated sidebar links
             case 'Teachers':
@@ -618,6 +925,7 @@ export default function App() {
                 </nav>
                 <div className="p-4 border-t">
                     <button
+                        onClick={handleLogout}
                         className="w-full flex items-center p-3 rounded-xl transition duration-150 text-red-500 hover:bg-red-50" // Logout: Red accent
                     >
                         <LogOut size={20} className="mr-3" />

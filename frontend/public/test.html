@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MacQuiz - Connection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #2563eb;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.success {
+            background: #10b981;
+            color: white;
+        }
+        .status.error {
+            background: #ef4444;
+            color: white;
+        }
+        .status.pending {
+            background: #f59e0b;
+            color: white;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .credentials {
+            background: #fef3c7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 MacQuiz Connection Test</h1>
+        
+        <div class="test-section">
+            <h3>1. Backend Health Check <span id="backend-status" class="status pending">Testing...</span></h3>
+            <p>Checking: http://localhost:8000/health</p>
+            <div id="backend-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. Frontend Connection <span id="frontend-status" class="status success">✓ Active</span></h3>
+            <p>You're viewing this page, so frontend is working!</p>
+        </div>
+
+        <div class="test-section">
+            <h3>3. API Login Test <span id="login-status" class="status pending">Not tested</span></h3>
+            <button onclick="testLogin()">Test Login</button>
+            <div id="login-result" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="credentials">
+            <h4>📋 Default Credentials:</h4>
+            <p><strong>Email:</strong> admin@macquiz.com</p>
+            <p><strong>Password:</strong> admin123</p>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button onclick="window.location.href='http://localhost:5173'">Go to Login Page</button>
+            <button onclick="window.location.href='http://localhost:8000/docs'">API Documentation</button>
+        </div>
+    </div>
+
+    <script>
+        // Test backend health
+        async function testBackend() {
+            const statusEl = document.getElementById('backend-status');
+            const resultEl = document.getElementById('backend-result');
+            
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                
+                if (data.status === 'healthy') {
+                    statusEl.className = 'status success';
+                    statusEl.textContent = '✓ Healthy';
+                    resultEl.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    throw new Error('Unexpected response');
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.textContent = '✗ Failed';
+                resultEl.textContent = `Error: ${error.message}\n\nMake sure backend is running on port 8000`;
+            }
+        }
+
+        // Test login
+        async function testLogin() {
+            const statusEl = document.getElementById('login-status');
+            const resultEl = document.getElementById('login-result');
+            resultEl.style.display = 'block';
+            
+            statusEl.className = 'status pending';
+            statusEl.textContent = 'Testing...';
+            resultEl.textContent = 'Attempting to login...';
+            
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin@macquiz.com');
+                formData.append('password', 'admin123');
+                
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.access_token) {
+                    statusEl.className = 'status success';
+                    statusEl.textContent = '✓ Success';
+                    resultEl.textContent = `Login successful!\n\nToken received: ${data.access_token.substring(0, 50)}...\n\nType: ${data.token_type}`;
+                } else {
+                    throw new Error(data.detail || 'Login failed');
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.textContent = '✗ Failed';
+                resultEl.textContent = `Login failed!\n\nError: ${error.message}\n\nCheck:\n- Backend is running\n- Admin user exists\n- CORS is configured correctly`;
+            }
+        }
+
+        // Run backend test on load
+        window.addEventListener('load', testBackend);
+    </script>
+</body>
+</html>
