@@ -1,12 +1,12 @@
-// ...existing code...
 import React, { useState } from "react";
-import { User, Lock, CheckCircle, Mail, Github } from 'lucide-react';
-import BG from "../assets/interlocking hexagon.png";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { User, Lock, CheckCircle } from 'lucide-react';
+import BG from "../assets/Lbg.svg";
 
-
-const GlassInput = ({ id, type, placeholder, icon: InputIcon, value, onChange, ...props }) => (
+const GlassInput = ({ id, type, placeholder, icon: InputIcon, value, onChange, error: inputError, ...props }) => (
     <div className="relative">
-        {/* Input icon with more visible color */}
         <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-700">
             <InputIcon size={20} />
         </div>
@@ -16,46 +16,101 @@ const GlassInput = ({ id, type, placeholder, icon: InputIcon, value, onChange, .
             placeholder={placeholder}
             value={value}
             onChange={onChange}
-            className="w-full pl-10 pr-4 py-3 bg-white/30 text-gray-700 placeholder-gray-500 
-                       border border-white/40 rounded-xl focus:outline-none focus:ring-2 
-                       focus:ring-blue-500 backdrop-blur-sm transition duration-300 
-                       shadow-lg focus:shadow-xl"
+            className={`w-full pl-10 pr-4 py-3 bg-white/30 text-gray-700 placeholder-gray-500 
+                       border ${inputError ? 'border-red-500' : 'border-white/40'} rounded-xl focus:outline-none focus:ring-2 
+                       ${inputError ? 'focus:ring-red-500' : 'focus:ring-blue-500'} backdrop-blur-sm transition duration-300 
+                       shadow-lg focus:shadow-xl`}
             {...props}
         />
+        {inputError && (
+            <p className="text-red-600 text-sm mt-1 ml-1 font-medium">{inputError}</p>
+        )}
     </div>
 );
 
-/**
- * Main application component displaying the professional two-column login screen.
- */
 export default function Login() {
+    const navigate = useNavigate();
+    const { login } = useAuth();
+    const { success, error } = useToast();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [formData, setFormData] = useState({
+        email: "",
+        password: ""
+    });
+    const [isLoading, setIsLoading] = useState(false);
+    const [errors, setErrors] = useState({});
 
-    const handleLogin = (e) => {
-        e.preventDefault();
-        setMessage('');
-        setLoading(true);
-
-        setTimeout(() => {
-            if (username === 'user' && password === 'password') {
-                setIsLoggedIn(true);
-            } else {
-                setMessage('Invalid credentials. Use "user" and "password" to log in.');
-            }
-            setLoading(false);
-        }, 1500);
+    const validateForm = () => {
+        const newErrors = {};
+        
+        if (!formData.email) {
+            newErrors.email = "Email is required";
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = "Email is invalid";
+        }
+        
+        if (!formData.password) {
+            newErrors.password = "Password is required";
+        } else if (formData.password.length < 6) {
+            newErrors.password = "Password must be at least 6 characters";
+        }
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+        // Clear error for this field
+        if (errors[name]) {
+            setErrors(prev => ({
+                ...prev,
+                [name]: ''
+            }));
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        if (!validateForm()) {
+            error("Please fix the form errors");
+            return;
+        }
+        
+        setIsLoading(true);
+        
+        try {
+            const result = await login(formData.email, formData.password);
+            
+            if (result.success) {
+                setIsLoggedIn(true);
+                success("Login successful!");
+                // Show success screen briefly before navigating
+                setTimeout(() => {
+                    navigate("/dashboard");
+                }, 2000);
+            } else {
+                error(result.error?.data?.detail || "Login failed. Please check your credentials.");
+            }
+        } catch (err) {
+            error("An unexpected error occurred");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Success screen after login
     if (isLoggedIn) {
         return (
             <div
                 className="min-h-screen flex items-center justify-center p-4 sm:p-8"
                 style={{
-                    backgroundImage: `url('${BG}')`,
+                    backgroundImage: `url(${BG})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     backgroundAttachment: 'fixed',
@@ -65,7 +120,14 @@ export default function Login() {
                 <div className="w-full max-w-md p-10 space-y-6 rounded-3xl backdrop-blur-xl bg-green-500/30 border border-green-500/50 shadow-2xl text-white text-center">
                     <CheckCircle className="w-16 h-16 mx-auto text-white" />
                     <h2 className="text-4xl font-bold">Login Successful!</h2>
-                    <p className="text-xl">Welcome back, {username}!</p>
+                    <p className="text-xl">Welcome back, {formData.email}!</p>
+                    <div className="flex items-center justify-center">
+                        <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="ml-2">Redirecting to dashboard...</span>
+                    </div>
                 </div>
             </div>
         );
@@ -75,7 +137,7 @@ export default function Login() {
         <div
             className="min-h-screen flex items-center justify-center p-4 sm:p-8"
             style={{
-                backgroundImage: `url('${BG}')`,
+                backgroundImage: `url(${BG})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundAttachment: 'fixed',
@@ -106,28 +168,34 @@ export default function Login() {
                 {/* Right Side: Login Form */}
                 <div className="flex-1 flex items-center justify-center p-8 sm:p-12">
                     <form
-                        onSubmit={handleLogin}
+                        onSubmit={handleSubmit}
                         className="w-full max-w-sm space-y-6 text-gray-500"
                     >
-                        <h2 className="text-3xl font-bold text-center">Sign In</h2>
+                        <h2 className="text-3xl font-bold text-center text-white">Sign In</h2>
 
                         <div className="space-y-4">
                             <GlassInput
-                                id="username"
-                                type="text"
-                                placeholder="Username (user)"
+                                id="email"
+                                type="email"
+                                name="email"
+                                placeholder="admin@macquiz.com"
                                 icon={User}
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                value={formData.email}
+                                onChange={handleChange}
+                                error={errors.email}
+                                disabled={isLoading}
                                 required
                             />
                             <GlassInput
                                 id="password"
                                 type="password"
-                                placeholder="Password (password)"
+                                name="password"
+                                placeholder="Enter your password"
                                 icon={Lock}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                value={formData.password}
+                                onChange={handleChange}
+                                error={errors.password}
+                                disabled={isLoading}
                                 required
                             />
                             <div className="text-sm text-right">
@@ -135,20 +203,16 @@ export default function Login() {
                             </div>
                         </div>
 
-                        {message && (
-                            <p className="text-sm text-red-300 text-center">{message}</p>
-                        )}
-
                         <button
                             type="submit"
                             className={`w-full py-3 rounded-xl font-bold tracking-wider transition duration-300 transform 
-                                        ${loading
+                                        ${isLoading
                                     ? 'bg-blue-300 text-white/70 cursor-not-allowed'
                                     : 'bg-white text-black hover:scale-[1.02] hover:bg-white/90 shadow-md hover:shadow-xl'
                                 }`}
-                            disabled={loading}
+                            disabled={isLoading}
                         >
-                            {loading ? (
+                            {isLoading ? (
                                 <div className="flex items-center justify-center">
                                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-800" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -160,22 +224,9 @@ export default function Login() {
                                 "Sign in"
                             )}
                         </button>
-
-                        {/* <div className="pt-4 space-y-4">
-                            <div className="text-center text-sm text-gray">OR CONTINUE WITH</div>
-                            <div className="flex justify-center space-x-4">
-                                <button className="flex items-center justify-center w-full py-2 px-4 rounded-xl text-white/90 border border-white/20 bg-black/20 hover:bg-black/40 transition">
-                                    <Mail size={18} className="mr-2" /> Email
-                                </button>
-                                <button className="flex items-center justify-center w-full py-2 px-4 rounded-xl text-white/90 border border-white/20 bg-black/20 hover:bg-black/40 transition">
-                                    <Github size={18} className="mr-2" /> GitHub
-                                </button>
-                            </div>
-                        </div> */}
                     </form>
                 </div>
             </div>
         </div>
     );
 }
-// ...existing code...

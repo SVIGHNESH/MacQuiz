@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { userAPI } from "../services/api";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar
@@ -93,9 +97,9 @@ const AddNewUserCard = ({ onAddClick }) => (
 
 // New Component: Form for creating new users
 const UserCreationForm = ({ onCancel, onUserCreated }) => {
-    const toast = useToast();
+    const { success, error } = useToast();
     const [formData, setFormData] = useState({
-        role: 'student', // Default role
+        role: 'student', // Default role (lowercase for API)
         first_name: '',
         last_name: '',
         email: '',
@@ -115,22 +119,21 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
         const file = e.target.files[0];
         setExcelFile(file);
         if (file) {
-            toast.info(`File "${file.name}" selected. Bulk upload will be available soon.`);
+            error("Bulk upload feature coming soon!");
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (excelFile) {
+            error("Bulk upload feature is not yet implemented");
+            return;
+        }
+        
         setIsSubmitting(true);
 
         try {
-            if (excelFile) {
-                toast.warning("Bulk upload feature coming soon!");
-                setIsSubmitting(false);
-                return;
-            }
-
-            // Prepare user data for API
             const userData = {
                 email: formData.email,
                 password: formData.password,
@@ -146,10 +149,9 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 userData.student_id = formData.student_id;
             }
 
-            // Call API to create user
             const response = await userAPI.createUser(userData);
             
-            toast.success(`User ${response.first_name} ${response.last_name} created successfully!`);
+            success(`User ${response.first_name} ${response.last_name} created successfully!`);
             
             // Reset form
             setFormData({
@@ -163,7 +165,6 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 class_year: '1st Year'
             });
 
-            // Notify parent component
             if (onUserCreated) {
                 onUserCreated(response);
             }
@@ -173,21 +174,20 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 onCancel();
             }, 1000);
             
-        } catch (error) {
-            console.error("Error creating user:", error);
-            if (error.status === 400) {
-                toast.error(error.data?.detail || "Email or Student ID already exists!");
-            } else if (error.status === 401 || error.status === 403) {
-                toast.error("You don't have permission to create users. Please login as admin.");
+        } catch (err) {
+            if (err.status === 400) {
+                error(err.data?.detail || "Email or Student ID already exists!");
+            } else if (err.status === 401 || err.status === 403) {
+                error("You don't have permission to create users. Please login as admin.");
             } else {
-                toast.error(error.message || "Failed to create user. Please try again.");
+                error(err.message || "Failed to create user. Please try again.");
             }
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const studentFields = formData.role.toLowerCase() === 'student' && (
+    const studentFields = formData.role === 'student' && (
         <>
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Roll No. / Student ID (Required)</label>
@@ -196,8 +196,8 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                     name="student_id" 
                     value={formData.student_id} 
                     onChange={handleInputChange} 
-                    required={formData.role.toLowerCase() === 'student' && !excelFile} 
-                    disabled={isSubmitting}
+                    required={formData.role === 'student' && !excelFile} 
+                    disabled={excelFile || isSubmitting}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                 />
             </div>
@@ -207,8 +207,8 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                     name="class_year" 
                     value={formData.class_year} 
                     onChange={handleInputChange} 
-                    required={formData.role.toLowerCase() === 'student' && !excelFile} 
-                    disabled={isSubmitting}
+                    required={formData.role === 'student' && !excelFile} 
+                    disabled={excelFile || isSubmitting}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
                 >
                     {['1st Year', '2nd Year', '3rd Year', '4th Year'].map(year => (
@@ -254,7 +254,7 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
 
             <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Or, Add Single User Manually</h3>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" disabled={excelFile}>
                 {/* User Role Selector */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
@@ -354,11 +354,10 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                     >
                         <X size={20} className="mr-2" /> Cancel
                     </button>
-                    {/* Reverted primary button color to blue */}
                     <button 
                         type="submit" 
                         disabled={isSubmitting}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? (
                             <>
@@ -379,27 +378,26 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
 
 // Component for listing existing users
 const UserList = ({ onAddClick, refreshTrigger }) => {
+    const { success, error } = useToast();
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, teacher, student
-    const toast = useToast();
 
-    useEffect(() => {
-        fetchUsers();
-    }, [filter, refreshTrigger]);
-
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         setIsLoading(true);
         try {
             const response = await userAPI.getAllUsers();
             setUsers(response);
-        } catch (error) {
-            console.error("Error fetching users:", error);
-            toast.error("Failed to load users");
+        } catch (err) {
+            error("Failed to load users");
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [error]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [filter, refreshTrigger, fetchUsers]);
 
     const handleDelete = async (userId, userName) => {
         if (!window.confirm(`Are you sure you want to delete ${userName}?`)) {
@@ -408,11 +406,10 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
 
         try {
             await userAPI.deleteUser(userId);
-            toast.success(`User ${userName} deleted successfully`);
+            success(`User ${userName} deleted successfully`);
             fetchUsers(); // Refresh list
-        } catch (error) {
-            console.error("Error deleting user:", error);
-            toast.error(error.data?.detail || "Failed to delete user");
+        } catch (err) {
+            error(err.data?.detail || "Failed to delete user");
         }
     };
 
@@ -667,16 +664,9 @@ const DetailedReportsTool = () => {
         // 1. Get the mock report data (which would normally come from a database query)
         const mockData = generateMockReportData();
 
-        // 2. Define the prompt and system instruction for Gemini
-        const systemPrompt = "You are a world-class Educational Data Analyst. Analyze the provided report findings and generate exactly four concise, actionable recommendations for the administrative team to improve student performance and system engagement. Use simple bullet points.";
-        const userQuery = `Analyze the following educational assessment report data and provide administrative recommendations:\n\n${mockData}`;
-
-        // 3. Construct the API payload (Placeholder for actual API call)
-        // NOTE: The actual API call is skipped here as the environment is not available.
-        // We will simulate a response for demonstration.
-
-        // Simulation of API Call:
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for 1.5 seconds
+        // For now, using simulated analysis since Gemini API key is not provided
+        // In production, you would uncomment the API call below
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
 
         const simulatedAnalysis = `### Analysis for ${classYear} / ${department} / ${semester}
 * **Targeted Remedial Action:** Focus on offering short, mandatory tutorials for students in **${classYear}** struggling with 'Algorithms' and 'Data Structures' to prevent cumulative failure.
@@ -684,10 +674,58 @@ const DetailedReportsTool = () => {
 * **Attendance Policy Reinforcement:** Implement a check-in process for **2nd Year Electrical Engineering** to address low attendance trends, potentially linking it to sessional marks.
 * **A+ Student Utilization:** Launch a peer-tutoring initiative, leveraging the **12 A+ grade students** to mentor underperforming peers, improving overall class performance.
 ---
-**Raw Data Preview:** ${mockData.substring(0, 100)}...`; // Using the generated data
+**Raw Data Preview:** ${mockData.substring(0, 100)}...`;
 
         setReportOutput(simulatedAnalysis);
         setIsGenerating(false);
+
+        /* Uncomment this section when you have a Gemini API key:
+        
+        const apiKey = "YOUR_GEMINI_API_KEY_HERE";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const maxRetries = 3;
+        
+        const payload = {
+            contents: [{
+                parts: [{
+                    text: `You are a world-class Educational Data Analyst. Analyze the provided report findings and generate exactly four concise, actionable recommendations for the administrative team to improve student performance and system engagement. Use simple bullet points.\n\nData: ${mockData}`
+                }]
+            }]
+        };
+
+        let result = null;
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                result = await response.json();
+                break; // Exit loop on success
+            } catch (error) {
+                if (i < maxRetries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                } else {
+                    setReportOutput("Error: Could not fetch analysis from Gemini API.");
+                    setIsGenerating(false);
+                    return;
+                }
+            }
+        }
+
+        if (result && result.candidates?.[0]?.content?.parts?.[0]?.text) {
+            setReportOutput(result.candidates[0].content.parts[0].text);
+        } else {
+            setReportOutput("Analysis failed or returned empty content.");
+        }
+        setIsGenerating(false);
+        */
     };
 
     return (
@@ -765,18 +803,17 @@ const DetailedReportsTool = () => {
 export default function App() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const toast = useToast();
+    const { success, error } = useToast();
     
     // userViewMode can be 'list' (show table) or 'add' (show form)
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [userViewMode, setUserViewMode] = useState('list');
     const [userListRefresh, setUserListRefresh] = useState(0);
 
-    // Handle logout
     const handleLogout = () => {
         if (window.confirm('Are you sure you want to logout?')) {
             logout();
-            toast.success('Logged out successfully');
+            success('Logged out successfully');
             navigate('/');
         }
     };
@@ -913,7 +950,7 @@ export default function App() {
                 <div className="p-4 border-t">
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center p-3 rounded-xl transition duration-150 text-red-500 hover:bg-red-50" // Logout: Red accent
+                        className="w-full flex items-center p-3 rounded-xl transition duration-150 text-red-500 hover:bg-red-50"
                     >
                         <LogOut size={20} className="mr-3" />
                         <span className="font-medium">Logout</span>

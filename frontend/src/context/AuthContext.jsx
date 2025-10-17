@@ -9,7 +9,6 @@ export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
-        // Check if user is authenticated on mount
         checkAuth();
     }, []);
 
@@ -17,14 +16,12 @@ export const AuthProvider = ({ children }) => {
         try {
             const token = localStorage.getItem('access_token');
             if (token) {
-                // Verify token by fetching user data
                 const userData = await userAPI.getCurrentUser();
                 setUser(userData);
                 setIsAuthenticated(true);
             }
         } catch (error) {
             console.error('Auth check failed:', error);
-            // Token is invalid, clear it
             authAPI.logout();
             setIsAuthenticated(false);
             setUser(null);
@@ -37,7 +34,6 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await authAPI.login(email, password);
             if (response.access_token) {
-                // Fetch user data after successful login
                 const userData = await userAPI.getCurrentUser();
                 setUser(userData);
                 setIsAuthenticated(true);
