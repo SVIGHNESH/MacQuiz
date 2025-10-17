@@ -1,18 +1,18 @@
+// ...existing code...
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/login";
+import DB from "./pages/dashBoard";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
-        {/*Landing page shows Login */}
         <Route path="/" element={<Login />} />
-
-        {/* Other routes can go here later */}
-        {/* <Route path="/dashboard" element={<Dashboard />} /> */}
-        {/* <Route path="*" element={<h1>404 Not Found</h1>} /> */}
+        <Route path="/dashBoard" element={<DB />} />
+        {/* Add additional routes here */}
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
+// ...existing code...
