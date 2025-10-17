@@ -90,9 +90,15 @@ export default function Login() {
             if (result.success) {
                 setIsLoggedIn(true);
                 success("Login successful!");
+                
                 // Show success screen briefly before navigating
                 setTimeout(() => {
-                    navigate("/dashboard");
+                    // Route based on user role
+                    if (result.user.role === 'student') {
+                        navigate("/student-dashboard");
+                    } else {
+                        navigate("/dashboard");
+                    }
                 }, 2000);
             } else {
                 error(result.error?.data?.detail || "Login failed. Please check your credentials.");

@@ -12,14 +12,6 @@ import {
  * --- MOCK DATA ---
  * Initializing all data to N/A or 0 until the administrator provisions users/quizzes.
  */
-// 4 specific blocks for new mockStats data
-const mockStats = [
-    // Reverted to original Blue/Indigo/Yellow/Green theme
-    { title: "Total Quizzes Held", value: "0", icon: FileText, color: "bg-blue-100/50 text-blue-800", subtitle: "No quizzes created yet", trend: "N/A" },
-    { title: "Active / Total Students", value: "0 / 0", icon: UserCheck, color: "bg-indigo-100/50 text-indigo-800", subtitle: "Students with regular attempts", trend: "N/A" },
-    { title: "Yesterday's Assessments", value: "0 / 0 students", icon: Zap, color: "bg-yellow-100/50 text-yellow-800", subtitle: "Assessments / Attendance", trend: "N/A" },
-    { title: "Active Teachers Today", value: "0 / 0", icon: Users, color: "bg-green-100/50 text-green-800", subtitle: "No assessments conducted today", trend: "N/A" },
-];
 
 const mockActivity = []; // No activity until users are added
 
@@ -809,6 +801,67 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [userViewMode, setUserViewMode] = useState('list');
     const [userListRefresh, setUserListRefresh] = useState(0);
+    const [allUsers, setAllUsers] = useState([]);
+    const [statsLoading, setStatsLoading] = useState(true);
+
+    // Fetch all users for dashboard stats
+    useEffect(() => {
+        const fetchDashboardStats = async () => {
+            setStatsLoading(true);
+            try {
+                const users = await userAPI.getAllUsers();
+                setAllUsers(users);
+            } catch (err) {
+                // Silently fail, will show 0 counts
+            } finally {
+                setStatsLoading(false);
+            }
+        };
+        
+        fetchDashboardStats();
+    }, [userListRefresh]); // Re-fetch when users are added/deleted
+
+    // Calculate dynamic stats from real user data
+    const dynamicStats = useMemo(() => {
+        const totalStudents = allUsers.filter(u => u.role === 'student').length;
+        const totalTeachers = allUsers.filter(u => u.role === 'teacher').length;
+        const totalUsers = allUsers.length;
+
+        return [
+            { 
+                title: "Total Quizzes Held", 
+                value: "0", 
+                icon: FileText, 
+                color: "bg-blue-100/50 text-blue-800", 
+                subtitle: "No quizzes created yet", 
+                trend: "N/A" 
+            },
+            { 
+                title: "Total Students", 
+                value: totalStudents.toString(), 
+                icon: UserCheck, 
+                color: "bg-indigo-100/50 text-indigo-800", 
+                subtitle: `${totalStudents} student${totalStudents !== 1 ? 's' : ''} registered`, 
+                trend: totalStudents > 0 ? `+${totalStudents}` : "N/A"
+            },
+            { 
+                title: "Total Teachers", 
+                value: totalTeachers.toString(), 
+                icon: Users, 
+                color: "bg-green-100/50 text-green-800", 
+                subtitle: `${totalTeachers} teacher${totalTeachers !== 1 ? 's' : ''} registered`, 
+                trend: totalTeachers > 0 ? `+${totalTeachers}` : "N/A"
+            },
+            { 
+                title: "Total Users", 
+                value: totalUsers.toString(), 
+                icon: Zap, 
+                color: "bg-yellow-100/50 text-yellow-800", 
+                subtitle: `${totalUsers} user${totalUsers !== 1 ? 's' : ''} in system`, 
+                trend: totalUsers > 0 ? `+${totalUsers}` : "N/A"
+            },
+        ];
+    }, [allUsers]);
 
     const handleLogout = () => {
         if (window.confirm('Are you sure you want to logout?')) {
@@ -856,9 +909,24 @@ export default function App() {
                     <div className="space-y-8">
                         {/* 4 Block Metrics (Colors reverted) */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {mockStats.map((stat) => (
-                                <StatCard key={stat.title} {...stat} />
-                            ))}
+                            {statsLoading ? (
+                                // Loading skeleton
+                                Array.from({ length: 4 }).map((_, idx) => (
+                                    <div key={idx} className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 animate-pulse">
+                                        <div className="flex items-center justify-between">
+                                            <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                                            <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                                        </div>
+                                        <div className="mt-4">
+                                            <div className="h-10 w-20 bg-gray-200 rounded"></div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                dynamicStats.map((stat) => (
+                                    <StatCard key={stat.title} {...stat} />
+                                ))
+                            )}
                         </div>
                         {/* Quick Access Card (BG reverted) */}
                         <AddNewUserCard onAddClick={handleAddNewUser} />
