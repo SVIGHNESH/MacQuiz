@@ -33,6 +33,7 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
         const errors = [];
         const warnings = [];
         const validRows = [];
+        const skippedRows = [];
         const duplicateEmails = new Set();
         const duplicateStudentIds = new Set();
         const fileEmails = new Set();
@@ -41,6 +42,7 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
         rows.forEach((row, index) => {
             const rowErrors = [];
             const rowWarnings = [];
+            let willBeSkipped = false;
 
             // Check required fields
             if (!row.role) rowErrors.push('Role is required');
@@ -59,6 +61,16 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
                 rowErrors.push('Invalid email format');
             }
 
+            // Validate phone number format if provided
+            if (row.phone_number && row.phone_number.trim()) {
+                const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+                if (!phoneRegex.test(row.phone_number)) {
+                    rowErrors.push('Invalid phone number format (use digits, spaces, +, -, ( ) only)');
+                } else if (row.phone_number.replace(/\D/g, '').length < 10) {
+                    rowWarnings.push('Phone number should have at least 10 digits');
+                }
+            }
+
             // Check for duplicates within file
             if (row.email) {
                 if (fileEmails.has(row.email.toLowerCase())) {
@@ -68,9 +80,10 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
                     fileEmails.add(row.email.toLowerCase());
                 }
 
-                // Check against existing emails
+                // Check against existing emails - CHANGED TO WARNING instead of ERROR
                 if (existingEmails.includes(row.email.toLowerCase())) {
-                    rowErrors.push('Email already exists in system');
+                    rowWarnings.push('Email already exists - will be skipped');
+                    willBeSkipped = true;
                 }
             }
 
@@ -87,9 +100,10 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
                         fileStudentIds.add(row.student_id);
                     }
 
-                    // Check against existing student IDs
+                    // Check against existing student IDs - CHANGED TO WARNING instead of ERROR
                     if (existingStudentIds.includes(row.student_id)) {
-                        rowErrors.push('Student ID already exists in system');
+                        rowWarnings.push('Student ID already exists - will be skipped');
+                        willBeSkipped = true;
                     }
                 }
 
@@ -103,13 +117,16 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
                 rowWarnings.push('Department is recommended');
             }
 
-            // Password strength warning
+            // Password strength validation
             if (row.password && row.password.length < 6) {
                 rowWarnings.push('Password should be at least 6 characters');
             }
 
-            if (rowErrors.length === 0) {
+            // Add to valid rows only if no critical errors and not skipped
+            if (rowErrors.length === 0 && !willBeSkipped) {
                 validRows.push(row);
+            } else if (willBeSkipped && rowErrors.length === 0) {
+                skippedRows.push(row);
             }
 
             if (rowErrors.length > 0 || rowWarnings.length > 0) {
@@ -126,12 +143,14 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
             valid: validRows,
             errors,
             warnings,
+            skippedRows,
             duplicateEmails: Array.from(duplicateEmails),
             duplicateStudentIds: Array.from(duplicateStudentIds),
             totalRows: rows.length,
             validCount: validRows.length,
             errorCount: errors.length,
-            warningCount: warnings.length
+            warningCount: warnings.length,
+            skippedCount: skippedRows.length
         };
     };
 
@@ -241,12 +260,12 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
     };
 
     const downloadTemplate = () => {
-        const csvContent = `role,first_name,last_name,email,password,student_id,department,class_year
-student,John,Doe,john.doe@example.com,password123,CS001,Computer Science Engg.,1st Year
-student,Jane,Smith,jane.smith@example.com,password123,CS002,Computer Science Engg.,2nd Year
-teacher,Alice,Johnson,alice.johnson@example.com,password123,,Mathematics,
-teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,
-student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Engineering,3rd Year`;
+        const csvContent = `role,first_name,last_name,email,password,phone_number,student_id,department,class_year
+student,John,Doe,john.doe@example.com,password123,+1234567890,CS001,Computer Science Engg.,1st Year
+student,Jane,Smith,jane.smith@example.com,password123,9876543210,CS002,Computer Science Engg.,2nd Year
+teacher,Alice,Johnson,alice.johnson@example.com,password123,+1-555-0100,,Mathematics,
+teacher,Bob,Williams,bob.williams@example.com,password123,555-0200,,Physics,
+student,Charlie,Brown,charlie.brown@example.com,password123,(555) 123-4567,EE001,Electrical Engineering,3rd Year`;
         
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
@@ -344,14 +363,18 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                             <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                     <h3 className="font-bold text-lg text-gray-800 mb-3">Validation Summary</h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                         <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                                             <p className="text-2xl font-bold text-gray-800">{validationResults.totalRows}</p>
                                             <p className="text-xs text-gray-600">Total Rows</p>
                                         </div>
                                         <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                                             <p className="text-2xl font-bold text-green-600">{validationResults.validCount}</p>
-                                            <p className="text-xs text-gray-600">Valid</p>
+                                            <p className="text-xs text-gray-600">Will Upload</p>
+                                        </div>
+                                        <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                                            <p className="text-2xl font-bold text-blue-600">{validationResults.skippedCount || 0}</p>
+                                            <p className="text-xs text-gray-600">Will Skip</p>
                                         </div>
                                         <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                                             <p className="text-2xl font-bold text-red-600">{validationResults.errorCount}</p>
@@ -361,9 +384,7 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                                             <p className="text-2xl font-bold text-yellow-600">{validationResults.warningCount}</p>
                                             <p className="text-xs text-gray-600">Warnings</p>
                                         </div>
-                                    </div>
-
-                                    {/* Duplicate Alerts */}
+                                    </div>                                    {/* Duplicate Alerts */}
                                     {validationResults.duplicateEmails.length > 0 && (
                                         <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-lg">
                                             <p className="text-sm font-semibold text-red-800 flex items-center">
@@ -414,6 +435,7 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                                                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Role</th>
                                                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Name</th>
                                                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Email</th>
+                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Phone</th>
                                                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Student ID</th>
                                                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Department</th>
                                                 </tr>
@@ -431,6 +453,7 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                                                         </td>
                                                         <td className="px-3 py-2 font-medium">{row.first_name} {row.last_name}</td>
                                                         <td className="px-3 py-2 text-gray-600">{row.email}</td>
+                                                        <td className="px-3 py-2 text-gray-600">{row.phone_number || '-'}</td>
                                                         <td className="px-3 py-2 text-gray-600">{row.student_id || '-'}</td>
                                                         <td className="px-3 py-2 text-gray-600">{row.department || '-'}</td>
                                                     </tr>
@@ -440,6 +463,38 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                                         {validationResults.valid.length > 10 && (
                                             <div className="text-center py-2 text-sm text-gray-500 bg-gray-50">
                                                 ... and {validationResults.valid.length - 10} more valid rows
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Skipped Rows (Existing Users) */}
+                            {validationResults.skippedRows && validationResults.skippedRows.length > 0 && (
+                                <div>
+                                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+                                        <AlertCircle size={20} className="text-blue-600 mr-2" />
+                                        Skipped Rows - Already Exist ({validationResults.skippedRows.length})
+                                    </h4>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                        {validationResults.skippedRows.slice(0, 5).map((row, idx) => (
+                                            <div key={idx} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <p className="font-semibold text-blue-800">Row {row._rowNumber}</p>
+                                                    <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">SKIPPED</span>
+                                                </div>
+                                                <p className="text-sm text-gray-700">
+                                                    {row.first_name} {row.last_name} ({row.email})
+                                                    {row.phone_number && ` • ${row.phone_number}`}
+                                                </p>
+                                                <p className="text-xs text-blue-700 mt-1">
+                                                    ℹ️ This user already exists in the system and will be skipped
+                                                </p>
+                                            </div>
+                                        ))}
+                                        {validationResults.skippedRows.length > 5 && (
+                                            <div className="text-center py-2 text-sm text-gray-500 bg-blue-50 rounded">
+                                                ... and {validationResults.skippedRows.length - 5} more skipped rows
                                             </div>
                                         )}
                                     </div>
@@ -462,6 +517,7 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                                                 </div>
                                                 <p className="text-sm text-gray-700 mb-1">
                                                     {error.data.first_name} {error.data.last_name} ({error.data.email})
+                                                    {error.data.phone_number && ` • ${error.data.phone_number}`}
                                                 </p>
                                                 <ul className="list-disc list-inside text-sm text-red-700">
                                                     {error.issues.map((issue, i) => (
@@ -490,6 +546,7 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
                                                 </div>
                                                 <p className="text-sm text-gray-700 mb-1">
                                                     {warning.data.first_name} {warning.data.last_name} ({warning.data.email})
+                                                    {warning.data.phone_number && ` • ${warning.data.phone_number}`}
                                                 </p>
                                                 <ul className="list-disc list-inside text-sm text-yellow-700">
                                                     {warning.issues.map((issue, i) => (
@@ -523,12 +580,19 @@ student,Charlie,Brown,charlie.brown@example.com,password123,EE001,Electrical Eng
 
                 {/* Footer Actions */}
                 <div className="border-t p-6 bg-gray-50 flex justify-between items-center">
-                    <div className="text-sm text-gray-600">
-                        {canUpload && (
-                            <p className="flex items-center text-green-600 font-semibold">
-                                <CheckCircle size={16} className="mr-1" />
-                                Ready to upload {validationResults.validCount} valid user{validationResults.validCount !== 1 ? 's' : ''}
-                            </p>
+                    <div className="text-sm space-y-1">
+                        {canUpload && validationResults && (
+                            <>
+                                <p className="flex items-center text-green-600 font-semibold">
+                                    <CheckCircle size={16} className="mr-1" />
+                                    Ready to upload {validationResults.validCount} new user{validationResults.validCount !== 1 ? 's' : ''}
+                                </p>
+                                {validationResults.skippedCount > 0 && (
+                                    <p className="flex items-center text-blue-600 text-xs">
+                                        ℹ️ {validationResults.skippedCount} existing user{validationResults.skippedCount !== 1 ? 's' : ''} will be skipped
+                                    </p>
+                                )}
+                            </>
                         )}
                         {validationResults && validationResults.errorCount > 0 && (
                             <p className="flex items-center text-red-600 font-semibold">

@@ -136,6 +136,7 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 role: formData.role.toLowerCase(),
                 department: formData.department,
                 class_year: formData.class_year,
+                phone_number: formData.phone_number || null, // Add phone number
             };
 
             // Add student_id only for students
@@ -508,6 +509,7 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
@@ -522,6 +524,7 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
                                         {user.first_name} {user.last_name}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.phone_number || '-'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
@@ -562,75 +565,258 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
 
 // New Component: Unified Table for Teacher/Student Activity Lookup
 const UserActivityTable = ({ userType }) => {
+    const { error } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
+    const [userData, setUserData] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    // Select data based on the current userType
-    const currentData = userType === 'Teachers' ? mockTeacherData : mockStudentData;
+    // Fetch users when component mounts
+    useEffect(() => {
+        const fetchUsers = async () => {
+            setIsLoading(true);
+            try {
+                const response = await userAPI.getAllUsers();
+                // Filter by role based on userType
+                const role = userType === 'Teachers' ? 'teacher' : 'student';
+                const filteredUsers = response.filter(user => user.role === role);
+                setUserData(filteredUsers);
+            } catch (err) {
+                error(`Failed to load ${userType.toLowerCase()}`);
+                console.error(err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchUsers();
+    }, [userType, error]);
 
     // Filter data based on search term (Name or ID/RollNo)
-    const filteredData = currentData.filter(user => {
+    const filteredData = userData.filter(user => {
         const searchLower = searchTerm.toLowerCase();
-        const nameMatch = user.name.toLowerCase().includes(searchLower);
-        const idMatch = user.rollNo ? user.rollNo.toLowerCase().includes(searchLower) : false; // Only students have rollNo
+        const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
+        const nameMatch = fullName.includes(searchLower);
+        const emailMatch = user.email.toLowerCase().includes(searchLower);
+        const idMatch = user.student_id ? user.student_id.toLowerCase().includes(searchLower) : false;
 
-        return nameMatch || idMatch;
+        return nameMatch || emailMatch || idMatch;
     });
+
+    // Format last active date
+    const formatLastActive = (lastActive) => {
+        if (!lastActive) return 'Never';
+        try {
+            const date = new Date(lastActive);
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return 'N/A';
+        }
+    };
+
+    // Export to CSV functionality
+    const exportToCSV = () => {
+        // Prepare CSV headers with all details
+        const headers = userType === 'Students' 
+            ? ['Sr. No.', 'Student ID', 'First Name', 'Last Name', 'Email', 'Phone Number', 'Department', 'Class/Year', 'Role', 'Created At', 'Last Active', 'Status']
+            : ['Sr. No.', 'First Name', 'Last Name', 'Email', 'Phone Number', 'Department', 'Role', 'Created At', 'Last Active', 'Status'];
+
+        // Prepare CSV rows with complete information
+        const rows = filteredData.map((user, index) => {
+            const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { 
+                month: 'short', day: 'numeric', year: 'numeric' 
+            }) : 'N/A';
+
+            if (userType === 'Students') {
+                return [
+                    index + 1,
+                    user.student_id || 'N/A',
+                    user.first_name,
+                    user.last_name,
+                    user.email,
+                    user.phone_number || 'N/A',
+                    user.department || 'N/A',
+                    user.class_year || 'N/A',
+                    user.role || 'student',
+                    createdDate,
+                    formatLastActive(user.last_active),
+                    user.is_active ? 'Active' : 'Inactive'
+                ];
+            }
+
+            // For teachers
+            return [
+                index + 1,
+                user.first_name,
+                user.last_name,
+                user.email,
+                user.phone_number || 'N/A',
+                user.department || 'N/A',
+                user.role || 'teacher',
+                createdDate,
+                formatLastActive(user.last_active),
+                user.is_active ? 'Active' : 'Inactive'
+            ];
+        });
+
+        // Combine headers and rows
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        // Create blob and download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${userType.toLowerCase()}_complete_details_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+    };
 
     return (
         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800">{userType} Activity Lookup</h2>
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800">{userType} Activity Lookup</h2>
+                <div className="text-sm text-gray-600">
+                    Total: <span className="font-bold text-blue-600">{userData.length}</span> {userType}
+                </div>
+            </div>
 
             {/* Search Bar (Prominently placed at the top) */}
             <div className="flex items-center space-x-2 w-full max-w-lg">
                 <div className="relative w-full">
                     <input
                         type="text"
-                        placeholder={`Search ${userType} by Name or ${userType === 'Students' ? 'Roll No.' : 'ID'}...`}
+                        placeholder={`Search ${userType} by Name${userType === 'Students' ? ', Roll No.' : ''} or Email...`}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" // Reverted focus ring
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                     />
                     <Search size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 </div>
+                {searchTerm && (
+                    <button
+                        onClick={() => setSearchTerm('')}
+                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                    >
+                        Clear
+                    </button>
+                )}
             </div>
 
-            {/* User List Table */}
-            <div className="overflow-x-auto border rounded-xl shadow-sm">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sr. No.</th>
-                            {userType === 'Students' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No.</th>}
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sem/Year</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredData.length > 0 ? filteredData.map((user, index) => (
-                            <tr key={user.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}</td>
-                                {userType === 'Students' && <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{user.rollNo}</td>}
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.branch}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.semYear}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.lastActive}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <button className="text-blue-600 hover:text-blue-900 text-xs font-bold">View Activity</button>
-                                </td>
-                            </tr>
-                        )) : (
-                            <tr>
-                                <td colSpan={userType === 'Students' ? 7 : 6} className="px-6 py-12 text-center text-gray-500">
-                                    No {userType} found matching the search criteria.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            {/* Loading State */}
+            {isLoading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Loading {userType.toLowerCase()}...</p>
+                </div>
+            ) : (
+                <>
+                    {/* Results Count */}
+                    {searchTerm && (
+                        <div className="text-sm text-gray-600">
+                            Showing <span className="font-bold text-blue-600">{filteredData.length}</span> of {userData.length} {userType.toLowerCase()}
+                        </div>
+                    )}
+
+                    {/* User List Table */}
+                    <div className="overflow-x-auto border rounded-xl shadow-sm">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sr. No.</th>
+                                    {userType === 'Students' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No.</th>}
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class/Year</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredData.length > 0 ? filteredData.map((user, index) => (
+                                    <tr key={user.id} className="hover:bg-gray-50 transition">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}</td>
+                                        {userType === 'Students' && (
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono bg-blue-50">
+                                                {user.student_id || 'N/A'}
+                                            </td>
+                                        )}
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {user.first_name} {user.last_name}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                            {user.email}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {user.department || 'N/A'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {user.class_year || 'N/A'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {formatLastActive(user.last_active)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {user.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={userType === 'Students' ? 8 : 7} className="px-6 py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <UserCheck size={48} className="text-gray-300" />
+                                                <p className="text-gray-500 font-medium">
+                                                    {searchTerm 
+                                                        ? `No ${userType.toLowerCase()} found matching "${searchTerm}"`
+                                                        : `No ${userType.toLowerCase()} found. Add some users to get started.`
+                                                    }
+                                                </p>
+                                                {searchTerm && (
+                                                    <button
+                                                        onClick={() => setSearchTerm('')}
+                                                        className="text-blue-600 hover:text-blue-700 text-sm font-semibold"
+                                                    >
+                                                        Clear search
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Export/Actions */}
+                    {filteredData.length > 0 && (
+                        <div className="flex justify-between items-center pt-4 border-t">
+                            <p className="text-sm text-gray-600">
+                                Displaying {filteredData.length} {userType.toLowerCase()}
+                            </p>
+                            <button 
+                                onClick={exportToCSV}
+                                className="flex items-center px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md"
+                            >
+                                <Calendar size={16} className="mr-2" />
+                                Export to CSV
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
         </div>
     );
 };

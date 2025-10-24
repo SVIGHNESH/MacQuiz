@@ -44,7 +44,8 @@ async def create_user(
         role=user_data.role.lower(),
         department=user_data.department,
         class_year=user_data.class_year,
-        student_id=user_data.student_id if user_data.role.lower() == "student" else None
+        student_id=user_data.student_id if user_data.role.lower() == "student" else None,
+        phone_number=user_data.phone_number
     )
     
     db.add(db_user)
@@ -61,7 +62,7 @@ async def bulk_upload_users(
 ):
     """
     Bulk upload users from CSV file.
-    Expected CSV format: role,first_name,last_name,email,password,student_id,department,class_year
+    Expected CSV format: role,first_name,last_name,email,password,phone_number,student_id,department,class_year
     """
     if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
         raise HTTPException(
@@ -142,7 +143,8 @@ async def bulk_upload_users(
                     role=role,
                     department=row.get('department', '').strip() or None,
                     class_year=row.get('class_year', '').strip() or None,
-                    student_id=student_id
+                    student_id=student_id,
+                    phone_number=row.get('phone_number', '').strip() or None
                 )
                 
                 db.add(new_user)

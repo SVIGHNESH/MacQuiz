@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     department: Optional[str] = None
     class_year: Optional[str] = None
     student_id: Optional[str] = None
+    phone_number: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
@@ -20,6 +21,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     department: Optional[str] = None
     class_year: Optional[str] = None
+    phone_number: Optional[str] = None
     is_active: Optional[bool] = None
 
 class UserResponse(UserBase):

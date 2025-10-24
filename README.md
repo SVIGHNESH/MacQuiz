@@ -66,7 +66,33 @@ QuizzApp-RBMI/
 
 ## Quick Start
 
-### Backend Setup
+### 🚀 One-Command Startup (Recommended)
+
+**Windows:**
+```batch
+start.bat
+```
+
+**Linux/Mac:**
+```bash
+./start.sh
+```
+
+This will automatically:
+- ✅ Check system requirements (Python 3 & Node.js)
+- ✅ Create virtual environment for backend
+- ✅ Install all dependencies (backend & frontend)
+- ✅ Start backend server on http://localhost:8000
+- ✅ Start frontend server on http://localhost:5173
+- ✅ Open the application in your browser
+
+**Note:** Press `Ctrl+C` to stop all servers
+
+---
+
+### Manual Setup (Alternative)
+
+#### Backend Setup
 
 1. Navigate to backend directory:
 ```bash

@@ -20,6 +20,7 @@ class User(Base):
     student_id = Column(String, unique=True, nullable=True, index=True)
     department = Column(String, nullable=True)
     class_year = Column(String, nullable=True)  # '1st Year', '2nd Year', etc.
+    phone_number = Column(String, nullable=True)
     
     # Relationships
     quizzes_created = relationship("Quiz", back_populates="creator", foreign_keys="Quiz.creator_id")

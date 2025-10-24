@@ -2,7 +2,47 @@
 
 Quick start scripts to launch both backend and frontend servers with a single command.
 
-## 📦 Prerequisites
+## MacQuiz - Startup Guide
+
+## � Quick Start (Easiest Way)
+
+### For Windows Users:
+1. Open Command Prompt or PowerShell
+2. Navigate to the MacQuiz folder
+3. Run:
+```batch
+start.bat
+```
+
+### For Linux/Mac Users:
+1. Open Terminal
+2. Navigate to the MacQuiz folder
+3. Run:
+```bash
+./start.sh
+```
+
+## ✨ What the Startup Script Does
+
+The startup script (`start.bat` or `start.sh`) automatically handles:
+
+1. **System Checks**
+   - ✅ Verifies Python 3 is installed
+   - ✅ Verifies Node.js is installed
+
+2. **Backend Setup**
+   - Creates Python virtual environment (if not exists)
+   - Installs all backend dependencies
+   - Starts FastAPI server on port 8000
+
+3. **Frontend Setup**
+   - Installs Node.js dependencies (if not exists)
+   - Starts React development server on port 5173
+
+4. **Browser Launch**
+   - Automatically opens http://localhost:5173 in your browser
+
+## 📋 Prerequisites
 
 Before running the startup scripts, make sure you have:
 
