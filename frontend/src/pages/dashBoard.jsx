@@ -110,8 +110,54 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
         setExcelFile(file);
-        if (file) {
-            error("Bulk upload feature coming soon!");
+    };
+
+    const handleBulkUpload = async () => {
+        if (!excelFile) {
+            error("Please select a file first");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', excelFile);
+
+            const response = await fetch('http://localhost:8000/api/v1/users/bulk-upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                success(`Successfully created ${result.created_count} users!`);
+                
+                if (result.error_count > 0) {
+                    console.error("Upload errors:", result.errors);
+                    error(`${result.error_count} rows had errors. Check console for details.`);
+                }
+
+                setExcelFile(null);
+                
+                if (onUserCreated) {
+                    onUserCreated(result);
+                }
+
+                setTimeout(() => {
+                    onCancel();
+                }, 1500);
+            } else {
+                error(result.detail || "Bulk upload failed");
+            }
+        } catch (err) {
+            error("Failed to upload file. Please try again.");
+            console.error("Bulk upload error:", err);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -119,7 +165,7 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
         e.preventDefault();
 
         if (excelFile) {
-            error("Bulk upload feature is not yet implemented");
+            await handleBulkUpload();
             return;
         }
         
@@ -227,8 +273,30 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                     Bulk User Upload (Excel/CSV)
                 </h3>
                 <p className="text-sm text-gray-600 mb-3">
-                    Upload an Excel file (.xlsx/.csv) with Roll No./ID and complete details to add users in bulk.
+                    Upload a CSV file with user details to add multiple users at once.
                 </p>
+                <div className="mb-3">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const csvContent = `role,first_name,last_name,email,password,student_id,department,class_year
+student,John,Doe,john.doe@example.com,password123,CS001,Computer Science,1st Year
+student,Jane,Smith,jane.smith@example.com,password123,CS002,Computer Science,2nd Year
+teacher,Alice,Johnson,alice.johnson@example.com,password123,,Mathematics,
+teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
+                            const blob = new Blob([csvContent], { type: 'text/csv' });
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'sample_users_template.csv';
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 underline"
+                    >
+                        Download Sample CSV Template
+                    </button>
+                </div>
                 <div className="flex items-center space-x-3">
                     <input
                         type="file"
@@ -241,6 +309,9 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                                     file:bg-blue-50 file:text-blue-700
                                     hover:file:bg-blue-100" // Reverted file input color
                     />
+                    {excelFile && (
+                        <span className="text-sm text-green-600">✓ {excelFile.name}</span>
+                    )}
                 </div>
             </div>
 

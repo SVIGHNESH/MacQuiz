@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+import csv
+import io
 from app.db.database import get_db
 from app.models.models import User
 from app.schemas.schemas import UserCreate, UserResponse, UserUpdate, UserActivityResponse
@@ -50,6 +52,129 @@ async def create_user(
     db.refresh(db_user)
     
     return db_user
+
+@router.post("/bulk-upload", dependencies=[Depends(require_role(["admin"]))])
+async def bulk_upload_users(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Bulk upload users from CSV file.
+    Expected CSV format: role,first_name,last_name,email,password,student_id,department,class_year
+    """
+    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV and Excel files are supported"
+        )
+    
+    try:
+        contents = await file.read()
+        
+        # Handle CSV files
+        if file.filename.endswith('.csv'):
+            decoded = contents.decode('utf-8')
+            csv_reader = csv.DictReader(io.StringIO(decoded))
+        else:
+            # For Excel files, we'll need openpyxl or pandas
+            # For now, return error for Excel
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Excel file support requires openpyxl. Please use CSV format."
+            )
+        
+        created_users = []
+        errors = []
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # start=2 because row 1 is header
+            try:
+                # Validate required fields
+                required_fields = ['role', 'first_name', 'last_name', 'email', 'password']
+                missing_fields = [field for field in required_fields if not row.get(field, '').strip()]
+                
+                if missing_fields:
+                    errors.append({
+                        "row": row_num,
+                        "error": f"Missing required fields: {', '.join(missing_fields)}"
+                    })
+                    continue
+                
+                role = row['role'].strip().lower()
+                email = row['email'].strip()
+                
+                # Check if email already exists
+                if db.query(User).filter(User.email == email).first():
+                    errors.append({
+                        "row": row_num,
+                        "email": email,
+                        "error": "Email already registered"
+                    })
+                    continue
+                
+                # For students, check student_id
+                student_id = row.get('student_id', '').strip() if role == 'student' else None
+                if role == 'student':
+                    if not student_id:
+                        errors.append({
+                            "row": row_num,
+                            "email": email,
+                            "error": "Student ID is required for students"
+                        })
+                        continue
+                    
+                    if db.query(User).filter(User.student_id == student_id).first():
+                        errors.append({
+                            "row": row_num,
+                            "email": email,
+                            "student_id": student_id,
+                            "error": "Student ID already registered"
+                        })
+                        continue
+                
+                # Create user
+                hashed_password = get_password_hash(row['password'].strip())
+                new_user = User(
+                    email=email,
+                    hashed_password=hashed_password,
+                    first_name=row['first_name'].strip(),
+                    last_name=row['last_name'].strip(),
+                    role=role,
+                    department=row.get('department', '').strip() or None,
+                    class_year=row.get('class_year', '').strip() or None,
+                    student_id=student_id
+                )
+                
+                db.add(new_user)
+                created_users.append({
+                    "email": email,
+                    "name": f"{new_user.first_name} {new_user.last_name}",
+                    "role": role
+                })
+                
+            except Exception as e:
+                errors.append({
+                    "row": row_num,
+                    "error": str(e)
+                })
+        
+        # Commit all users at once
+        if created_users:
+            db.commit()
+        
+        return {
+            "success": True,
+            "created_count": len(created_users),
+            "error_count": len(errors),
+            "created_users": created_users,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process file: {str(e)}"
+        )
 
 @router.get("/", response_model=List[UserResponse], dependencies=[Depends(require_role(["admin"]))])
 async def get_all_users(

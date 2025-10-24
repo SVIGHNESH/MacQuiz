@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { User, Lock, CheckCircle } from 'lucide-react';
+import { User, Lock, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import BG from "../assets/Lbg.svg";
 
-const GlassInput = ({ id, type, placeholder, icon: InputIcon, value, onChange, error: inputError, ...props }) => (
+const GlassInput = ({ id, type, placeholder, icon: InputIcon, value, onChange, error: inputError, showPasswordToggle, onTogglePassword, ...props }) => (
     <div className="relative">
         <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-700">
             <InputIcon size={20} />
@@ -16,12 +16,22 @@ const GlassInput = ({ id, type, placeholder, icon: InputIcon, value, onChange, e
             placeholder={placeholder}
             value={value}
             onChange={onChange}
-            className={`w-full pl-10 pr-4 py-3 bg-white/30 text-gray-700 placeholder-gray-500 
+            className={`w-full pl-10 ${showPasswordToggle ? 'pr-12' : 'pr-4'} py-3 bg-white/30 text-gray-700 placeholder-gray-500 
                        border ${inputError ? 'border-red-500' : 'border-white/40'} rounded-xl focus:outline-none focus:ring-2 
                        ${inputError ? 'focus:ring-red-500' : 'focus:ring-blue-500'} backdrop-blur-sm transition duration-300 
                        shadow-lg focus:shadow-xl`}
             {...props}
         />
+        {showPasswordToggle && (
+            <button
+                type="button"
+                onClick={onTogglePassword}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-700 hover:text-gray-900 transition-colors"
+                tabIndex="-1"
+            >
+                {type === 'password' ? <Eye size={20} /> : <EyeOff size={20} />}
+            </button>
+        )}
         {inputError && (
             <p className="text-red-600 text-sm mt-1 ml-1 font-medium">{inputError}</p>
         )}
@@ -33,6 +43,7 @@ export default function Login() {
     const { login } = useAuth();
     const { success, error } = useToast();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         email: "",
         password: ""
@@ -194,7 +205,7 @@ export default function Login() {
                             />
                             <GlassInput
                                 id="password"
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 name="password"
                                 placeholder="Enter your password"
                                 icon={Lock}
@@ -202,6 +213,8 @@ export default function Login() {
                                 onChange={handleChange}
                                 error={errors.password}
                                 disabled={isLoading}
+                                showPasswordToggle={true}
+                                onTogglePassword={() => setShowPassword(!showPassword)}
                                 required
                             />
                             <div className="text-sm text-right">
