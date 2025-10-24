@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { userAPI } from "../services/api";
+import BulkUploadModal from "../components/BulkUploadModal";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
-    TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar
+    TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload
 } from 'lucide-react';
 
 /**
@@ -96,78 +97,33 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
         last_name: '',
         email: '',
         password: '',
+        phone_number: '', // New phone number field
         student_id: '', // Specific to student
         department: '',
         class_year: '1st Year'
     });
-    const [excelFile, setExcelFile] = useState(null);
+    const [showBulkUpload, setShowBulkUpload] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        setExcelFile(file);
-    };
-
-    const handleBulkUpload = async () => {
-        if (!excelFile) {
-            error("Please select a file first");
-            return;
+    const handleBulkUploadSuccess = (result) => {
+        success(`Successfully created ${result.created_count} users!`);
+        
+        if (result.error_count > 0) {
+            console.error("Upload errors:", result.errors);
+            error(`${result.error_count} rows had errors. Check console for details.`);
         }
 
-        setIsSubmitting(true);
-        try {
-            const formData = new FormData();
-            formData.append('file', excelFile);
-
-            const response = await fetch('http://localhost:8000/api/v1/users/bulk-upload', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                },
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                success(`Successfully created ${result.created_count} users!`);
-                
-                if (result.error_count > 0) {
-                    console.error("Upload errors:", result.errors);
-                    error(`${result.error_count} rows had errors. Check console for details.`);
-                }
-
-                setExcelFile(null);
-                
-                if (onUserCreated) {
-                    onUserCreated(result);
-                }
-
-                setTimeout(() => {
-                    onCancel();
-                }, 1500);
-            } else {
-                error(result.detail || "Bulk upload failed");
-            }
-        } catch (err) {
-            error("Failed to upload file. Please try again.");
-            console.error("Bulk upload error:", err);
-        } finally {
-            setIsSubmitting(false);
+        if (onUserCreated) {
+            onUserCreated(result);
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (excelFile) {
-            await handleBulkUpload();
-            return;
-        }
         
         setIsSubmitting(true);
 
@@ -198,6 +154,7 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 last_name: '',
                 email: '',
                 password: '',
+                phone_number: '',
                 student_id: '',
                 department: '',
                 class_year: '1st Year'
@@ -225,38 +182,6 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
         }
     };
 
-    const studentFields = formData.role === 'student' && (
-        <>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Roll No. / Student ID (Required)</label>
-                <input 
-                    type="text" 
-                    name="student_id" 
-                    value={formData.student_id} 
-                    onChange={handleInputChange} 
-                    required={formData.role === 'student' && !excelFile} 
-                    disabled={excelFile || isSubmitting}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Class/Year</label>
-                <select 
-                    name="class_year" 
-                    value={formData.class_year} 
-                    onChange={handleInputChange} 
-                    required={formData.role === 'student' && !excelFile} 
-                    disabled={excelFile || isSubmitting}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-                >
-                    {['1st Year', '2nd Year', '3rd Year', '4th Year'].map(year => (
-                        <option key={year} value={year}>{year}</option>
-                    ))}
-                </select>
-            </div>
-        </>
-    );
-
     return (
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
             <div className="flex justify-between items-center border-b pb-4 mb-6">
@@ -266,58 +191,46 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 </button>
             </div>
 
-            {/* New Bulk Upload Section */}
-            <div className="border border-dashed border-gray-400 p-6 rounded-xl mb-8 bg-gray-50">
-                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center">
-                    <List size={20} className="mr-2 text-blue-600" /> {/* Reverted icon color */}
-                    Bulk User Upload (Excel/CSV)
-                </h3>
-                <p className="text-sm text-gray-600 mb-3">
-                    Upload a CSV file with user details to add multiple users at once.
-                </p>
-                <div className="mb-3">
+            {/* Bulk Upload Modal */}
+            <BulkUploadModal 
+                isOpen={showBulkUpload}
+                onClose={() => setShowBulkUpload(false)}
+                onSuccess={handleBulkUploadSuccess}
+            />
+
+            {/* New Bulk Upload Button */}
+            <div className="border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl mb-8">
+                <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-3">
+                        <Upload size={24} className="text-blue-600 mt-1" />
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800 mb-2">
+                                Bulk User Upload
+                            </h3>
+                            <p className="text-sm text-gray-600 mb-3">
+                                Upload a CSV file to add multiple users at once. Preview data, detect duplicates, and validate before importing.
+                            </p>
+                            <ul className="text-xs text-gray-500 space-y-1">
+                                <li>• Real-time validation and duplicate detection</li>
+                                <li>• Preview imported data before uploading</li>
+                                <li>• Automatic error reporting with line numbers</li>
+                            </ul>
+                        </div>
+                    </div>
                     <button
-                        type="button"
-                        onClick={() => {
-                            const csvContent = `role,first_name,last_name,email,password,student_id,department,class_year
-student,John,Doe,john.doe@example.com,password123,CS001,Computer Science,1st Year
-student,Jane,Smith,jane.smith@example.com,password123,CS002,Computer Science,2nd Year
-teacher,Alice,Johnson,alice.johnson@example.com,password123,,Mathematics,
-teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
-                            const blob = new Blob([csvContent], { type: 'text/csv' });
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'sample_users_template.csv';
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                        }}
-                        className="text-sm text-blue-600 hover:text-blue-700 underline"
+                        onClick={() => setShowBulkUpload(true)}
+                        disabled={isSubmitting}
+                        className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg whitespace-nowrap disabled:opacity-50"
                     >
-                        Download Sample CSV Template
+                        <Upload size={20} className="mr-2" />
+                        Bulk Upload
                     </button>
-                </div>
-                <div className="flex items-center space-x-3">
-                    <input
-                        type="file"
-                        accept=".xlsx, .xls, .csv"
-                        onChange={handleFileUpload}
-                        className="block w-full text-sm text-gray-500
-                                    file:mr-4 file:py-2 file:px-4
-                                    file:rounded-full file:border-0
-                                    file:text-sm file:font-semibold
-                                    file:bg-blue-50 file:text-blue-700
-                                    hover:file:bg-blue-100" // Reverted file input color
-                    />
-                    {excelFile && (
-                        <span className="text-sm text-green-600">✓ {excelFile.name}</span>
-                    )}
                 </div>
             </div>
 
             <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Or, Add Single User Manually</h3>
 
-            <form onSubmit={handleSubmit} className="space-y-6" disabled={excelFile}>
+            <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
                 {/* User Role Selector */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
@@ -326,13 +239,31 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                         value={formData.role} 
                         onChange={handleInputChange} 
                         required 
-                        disabled={excelFile || isSubmitting}
+                        disabled={isSubmitting}
                         className="w-full p-3 border border-gray-300 rounded-lg bg-blue-50 ring-2 ring-blue-500 font-semibold disabled:bg-gray-100"
                     >
                         <option value="teacher">Teacher / Professor</option>
                         <option value="student">Student</option>
                     </select>
                 </div>
+
+                {/* Student ID field (shown first for students) */}
+                {formData.role === 'student' && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Roll No. / Student ID (Required)</label>
+                        <input 
+                            type="text" 
+                            name="student_id" 
+                            value={formData.student_id} 
+                            onChange={handleInputChange} 
+                            required={formData.role === 'student'} 
+                            disabled={isSubmitting}
+                            autoComplete="off"
+                            placeholder="e.g., CS2024001"
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
+                    </div>
+                )}
 
                 {/* Grid for main details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -343,8 +274,10 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                             name="first_name" 
                             value={formData.first_name} 
                             onChange={handleInputChange} 
-                            required={!excelFile} 
-                            disabled={excelFile || isSubmitting} 
+                            required 
+                            disabled={isSubmitting}
+                            autoComplete="off"
+                            placeholder="Enter first name"
                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                         />
                     </div>
@@ -355,8 +288,10 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                             name="last_name" 
                             value={formData.last_name} 
                             onChange={handleInputChange} 
-                            required={!excelFile} 
-                            disabled={excelFile || isSubmitting} 
+                            required 
+                            disabled={isSubmitting}
+                            autoComplete="off"
+                            placeholder="Enter last name"
                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                         />
                     </div>
@@ -367,8 +302,23 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                             name="email" 
                             value={formData.email} 
                             onChange={handleInputChange} 
-                            required={!excelFile} 
-                            disabled={excelFile || isSubmitting} 
+                            required 
+                            disabled={isSubmitting}
+                            autoComplete="off"
+                            placeholder="example@email.com"
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
+                    </div>
+                    <div className="col-span-1 md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number (Optional)</label>
+                        <input 
+                            type="tel" 
+                            name="phone_number" 
+                            value={formData.phone_number} 
+                            onChange={handleInputChange} 
+                            disabled={isSubmitting}
+                            autoComplete="off"
+                            placeholder="+1234567890 or 1234567890"
                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                         />
                     </div>
@@ -379,8 +329,10 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                             name="password" 
                             value={formData.password} 
                             onChange={handleInputChange} 
-                            required={!excelFile} 
-                            disabled={excelFile || isSubmitting} 
+                            required 
+                            disabled={isSubmitting}
+                            autoComplete="new-password"
+                            placeholder="Set temporary password"
                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                         />
                     </div>
@@ -394,8 +346,8 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                             name="department" 
                             value={formData.department} 
                             onChange={handleInputChange} 
-                            required={!excelFile} 
-                            disabled={excelFile || isSubmitting} 
+                            required 
+                            disabled={isSubmitting} 
                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
                         >
                             <option value="">Select Department</option>
@@ -404,7 +356,23 @@ teacher,Bob,Williams,bob.williams@example.com,password123,,Physics,`;
                             ))}
                         </select>
                     </div>
-                    {studentFields}
+                    {formData.role === 'student' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Class/Year</label>
+                            <select 
+                                name="class_year" 
+                                value={formData.class_year} 
+                                onChange={handleInputChange} 
+                                required={formData.role === 'student'} 
+                                disabled={isSubmitting}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                            >
+                                {['1st Year', '2nd Year', '3rd Year', '4th Year'].map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
 
                 {/* Action Buttons */}

@@ -5,7 +5,7 @@ import { ToastProvider } from "./context/ToastContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import Login from "./pages/login";
 import Dashboard from "./pages/dashBoard";
-import StudentDashboard from "./pages/StudentDashboard";
+import StudentDashboard from "./pages/studentDashboard";
 
 export default function App() {
   return (
