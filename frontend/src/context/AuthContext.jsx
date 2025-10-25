@@ -34,12 +34,14 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await authAPI.login(email, password);
             if (response.access_token) {
-                const userData = await userAPI.getCurrentUser();
+                // Use the user data from login response (backend v2.0 includes it)
+                const userData = response.user;
                 setUser(userData);
                 setIsAuthenticated(true);
                 return { success: true, user: userData };
             }
         } catch (error) {
+            console.error('Login error:', error);
             return { success: false, error };
         }
     };

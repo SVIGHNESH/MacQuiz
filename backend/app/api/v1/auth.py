@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime
 from app.db.database import get_db
 from app.models.models import User
-from app.schemas.schemas import Token, LoginRequest
+from app.schemas.schemas import Token, LoginRequest, UserResponse
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
+from app.core.deps import get_current_active_user
 
 router = APIRouter()
 
@@ -15,6 +16,9 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+    """
+    OAuth2 compatible login with form data (for Swagger UI)
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -29,18 +33,29 @@ async def login(
             detail="Inactive user"
         )
     
+    # Update last active
+    user.last_active = datetime.utcnow()
+    db.commit()
+    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.from_orm(user)
+    }
 
 @router.post("/login-json", response_model=Token)
 async def login_json(
     login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
+    """
+    JSON-based login (for frontend)
+    """
     user = db.query(User).filter(User.email == login_data.username).first()
     if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
@@ -54,9 +69,26 @@ async def login_json(
             detail="Inactive user"
         )
     
+    # Update last active
+    user.last_active = datetime.utcnow()
+    db.commit()
+    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.from_orm(user)
+    }
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get current logged-in user
+    """
+    return current_user

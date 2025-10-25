@@ -3,28 +3,7 @@
 > vite
 
 
-  VITE v7.1.9  ready in 502 ms
+  VITE v7.1.9  ready in 597 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
-7:32:08 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:32:08 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:32:30 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:35:46 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:35:58 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:36:07 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:36:53 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:38:35 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:45:59 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:46:21 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:46:35 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:46:44 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:47:04 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:47:26 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:47:51 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-7:48:24 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-8:03:11 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-8:06:33 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-8:06:57 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-8:07:32 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css
-8:14:09 AM [vite] (client) hmr update /src/pages/dashBoard.jsx, /src/index.css

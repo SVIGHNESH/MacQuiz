@@ -19,6 +19,12 @@ async def start_quiz_attempt(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    """
+    Start a quiz attempt with eligibility checks
+    - Validates quiz is active
+    - Checks schedule and grace period
+    - Prevents duplicate attempts
+    """
     # Verify quiz exists
     quiz = db.query(Quiz).filter(Quiz.id == attempt_data.quiz_id).first()
     if not quiz:
@@ -33,11 +39,42 @@ async def start_quiz_attempt(
             detail="Quiz is not active"
         )
     
+    # Check if already attempted
+    existing_attempt = db.query(QuizAttempt).filter(
+        QuizAttempt.quiz_id == quiz.id,
+        QuizAttempt.student_id == current_user.id
+    ).first()
+    
+    if existing_attempt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have already attempted this quiz"
+        )
+    
+    # Check schedule and grace period
+    if quiz.scheduled_at:
+        now = datetime.utcnow()
+        grace_end = quiz.scheduled_at + timedelta(minutes=quiz.grace_period_minutes)
+        
+        if now < quiz.scheduled_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Quiz has not started yet. Starts at {quiz.scheduled_at}"
+            )
+        
+        if now > grace_end:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Grace period for starting this quiz has expired"
+            )
+    
     # Create attempt
     db_attempt = QuizAttempt(
         quiz_id=quiz.id,
         student_id=current_user.id,
-        total_marks=quiz.total_marks
+        total_marks=quiz.total_marks,
+        is_completed=False,
+        is_graded=False
     )
     
     db.add(db_attempt)
@@ -48,12 +85,20 @@ async def start_quiz_attempt(
 
 @router.post("/submit", response_model=QuizAttemptResponse)
 async def submit_quiz_attempt(
+    attempt_id: int,
     submission: QuizAttemptSubmit,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    """
+    Submit quiz attempt with custom marking scheme
+    - Applies positive marking for correct answers
+    - Applies negative marking for incorrect answers
+    - Validates deadline if quiz has duration
+    - Calculates time taken
+    """
     # Get attempt
-    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == submission.attempt_id).first()
+    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == attempt_id).first()
     if not attempt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -67,13 +112,43 @@ async def submit_quiz_attempt(
             detail="Not your attempt"
         )
     
-    # Calculate score
+    if attempt.is_completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Quiz already submitted"
+        )
+    
+    # Get quiz
+    quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
+    
+    # Validate deadline
+    if quiz.duration_minutes:
+        deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
+        if datetime.utcnow() > deadline:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Submission deadline has passed"
+            )
+    
+    # Calculate score with custom marking scheme
     total_score = 0
+    correct_count = 0
+    incorrect_count = 0
+    
     for answer_data in submission.answers:
         question = db.query(Question).filter(Question.id == answer_data.question_id).first()
         if question:
+            # Check answer correctness
             is_correct = answer_data.answer_text.strip().lower() == question.correct_answer.strip().lower()
-            marks_awarded = question.marks if is_correct else 0
+            
+            # Apply marking scheme
+            if is_correct:
+                marks_awarded = quiz.marks_per_correct * question.marks
+                correct_count += 1
+            else:
+                marks_awarded = -quiz.negative_marking if quiz.negative_marking > 0 else 0
+                incorrect_count += 1
+            
             total_score += marks_awarded
             
             # Save answer
@@ -86,10 +161,16 @@ async def submit_quiz_attempt(
             )
             db.add(db_answer)
     
+    # Calculate time taken
+    time_taken = (datetime.utcnow() - attempt.started_at).total_seconds() / 60  # in minutes
+    
     # Update attempt
-    attempt.score = total_score
-    attempt.percentage = (total_score / attempt.total_marks * 100) if attempt.total_marks > 0 else 0
+    attempt.score = max(0, total_score)  # Don't allow negative total scores
+    attempt.percentage = (attempt.score / attempt.total_marks * 100) if attempt.total_marks > 0 else 0
     attempt.submitted_at = datetime.utcnow()
+    attempt.time_taken_minutes = round(time_taken, 2)
+    attempt.is_completed = True
+    attempt.is_graded = True
     
     db.commit()
     db.refresh(attempt)
