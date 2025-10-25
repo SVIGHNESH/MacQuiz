@@ -79,7 +79,6 @@ const AddNewUserCard = ({ onAddClick }) => (
                 <h3 className="text-xl font-bold">New User Provisioning</h3>
                 <p className="text-blue-200 text-sm mt-1">Quickly onboard new teachers or students.</p>
             </div>
-            <Plus size={32} className="opacity-70 bg-white/20 p-1 rounded-full" />
         </div>
         {/* Reverted Button text color to blue */}
         <div className="mt-5 w-full bg-white text-blue-800 py-3 rounded-xl text-center font-semibold transition shadow-lg text-lg">
@@ -408,12 +407,232 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
     );
 };
 
+// Component for editing existing users
+const EditUserModal = ({ user, onClose, onSuccess }) => {
+    const { success, error } = useToast();
+    const [formData, setFormData] = useState({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        email: user.email || '',
+        phone_number: user.phone_number || '',
+        department: user.department || '',
+        class_year: user.class_year || '',
+        is_active: user.is_active !== undefined ? user.is_active : true,
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleInputChange = (e) => {
+        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+        setFormData({ ...formData, [e.target.name]: value });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        try {
+            const updateData = {
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                phone_number: formData.phone_number || null,
+                department: formData.department || null,
+                class_year: formData.class_year || null,
+                is_active: formData.is_active,
+            };
+
+            await userAPI.updateUser(user.id, updateData);
+            success(`User ${formData.first_name} ${formData.last_name} updated successfully!`);
+            onSuccess();
+        } catch (err) {
+            if (err.status === 400) {
+                error(err.data?.detail || "Failed to update user");
+            } else if (err.status === 401 || err.status === 403) {
+                error("You don't have permission to update users.");
+            } else {
+                error(err.message || "Failed to update user. Please try again.");
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-2xl flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold">Edit User</h2>
+                        <p className="text-blue-100 text-sm mt-1">Update user information</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="text-white hover:bg-white/20 p-2 rounded-full transition"
+                        disabled={isSubmitting}
+                    >
+                        <X size={24} />
+                    </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    {/* Email (Read-only) */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email (Login ID)</label>
+                        <input 
+                            type="email" 
+                            value={formData.email}
+                            disabled
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed" 
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                    </div>
+
+                    {/* Role (Read-only) */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                        <input 
+                            type="text" 
+                            value={user.role}
+                            disabled
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed capitalize" 
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Role cannot be changed</p>
+                    </div>
+
+                    {/* Name fields */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                            <input 
+                                type="text" 
+                                name="first_name" 
+                                value={formData.first_name} 
+                                onChange={handleInputChange} 
+                                required 
+                                disabled={isSubmitting}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                            <input 
+                                type="text" 
+                                name="last_name" 
+                                value={formData.last_name} 
+                                onChange={handleInputChange} 
+                                required 
+                                disabled={isSubmitting}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                            />
+                        </div>
+                    </div>
+
+                    {/* Phone Number */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                        <input 
+                            type="tel" 
+                            name="phone_number" 
+                            value={formData.phone_number} 
+                            onChange={handleInputChange} 
+                            disabled={isSubmitting}
+                            placeholder="+1234567890"
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                        />
+                    </div>
+
+                    {/* Department and Class/Year */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                            <select 
+                                name="department" 
+                                value={formData.department} 
+                                onChange={handleInputChange} 
+                                disabled={isSubmitting} 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                            >
+                                <option value="">Select Department</option>
+                                {['Computer Science Engg.', 'Artificial Intelligence', 'Mechanical Engineering', 'Electrical Engineering', 'Mathematics', 'Physics'].map(dept => (
+                                    <option key={dept} value={dept}>{dept}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {user.role === 'student' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Class/Year</label>
+                                <select 
+                                    name="class_year" 
+                                    value={formData.class_year} 
+                                    onChange={handleInputChange} 
+                                    disabled={isSubmitting}
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                                >
+                                    <option value="">Select Year</option>
+                                    {['1st Year', '2nd Year', '3rd Year', '4th Year'].map(year => (
+                                        <option key={year} value={year}>{year}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Active Status */}
+                    <div className="flex items-center">
+                        <input
+                            type="checkbox"
+                            name="is_active"
+                            checked={formData.is_active}
+                            onChange={handleInputChange}
+                            disabled={isSubmitting}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label className="ml-2 block text-sm text-gray-700">
+                            Active User (Uncheck to deactivate account)
+                        </label>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-end space-x-4 pt-4 border-t">
+                        <button 
+                            type="button" 
+                            onClick={onClose} 
+                            disabled={isSubmitting}
+                            className="flex items-center px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
+                        >
+                            <X size={20} className="mr-2" /> Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            disabled={isSubmitting}
+                            className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md disabled:bg-blue-400 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
+                                    Updating...
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={20} className="mr-2" /> Update User
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 // Component for listing existing users
 const UserList = ({ onAddClick, refreshTrigger }) => {
     const { success, error } = useToast();
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, teacher, student
+    const [editingUser, setEditingUser] = useState(null);
 
     const fetchUsers = useCallback(async () => {
         setIsLoading(true);
@@ -443,6 +662,15 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
         } catch (err) {
             error(err.data?.detail || "Failed to delete user");
         }
+    };
+
+    const handleEdit = (user) => {
+        setEditingUser(user);
+    };
+
+    const handleUpdateSuccess = () => {
+        setEditingUser(null);
+        fetchUsers();
     };
 
     const filteredUsers = users.filter(user => {
@@ -545,12 +773,20 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         {user.role !== 'admin' && (
-                                            <button
-                                                onClick={() => handleDelete(user.id, `${user.first_name} ${user.last_name}`)}
-                                                className="text-red-600 hover:text-red-900 transition"
-                                            >
-                                                Delete
-                                            </button>
+                                            <div className="flex space-x-3">
+                                                <button
+                                                    onClick={() => handleEdit(user)}
+                                                    className="text-blue-600 hover:text-blue-900 transition"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(user.id, `${user.first_name} ${user.last_name}`)}
+                                                    className="text-red-600 hover:text-red-900 transition"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         )}
                                     </td>
                                 </tr>
@@ -558,6 +794,15 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {/* Edit User Modal */}
+            {editingUser && (
+                <EditUserModal
+                    user={editingUser}
+                    onClose={() => setEditingUser(null)}
+                    onSuccess={handleUpdateSuccess}
+                />
             )}
         </div>
     );
