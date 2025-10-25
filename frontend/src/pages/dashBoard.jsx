@@ -6,7 +6,8 @@ import { userAPI } from "../services/api";
 import BulkUploadModal from "../components/BulkUploadModal";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
-    TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload
+    TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle
 } from 'lucide-react';
 
 /**
@@ -19,6 +20,68 @@ const mockActivity = []; // No activity until users are added
 // Mock data for the new Activity Tracker Table
 const mockTeacherData = []; // Detaabase mein data save hone tak khali
 const mockStudentData = []; // Detaabase mein data save hone tak khali
+
+/**
+ * --- UTILITY FUNCTIONS ---
+ */
+
+// Password strength validator
+const validatePasswordStrength = (password) => {
+    const checks = {
+        length: password.length >= 8,
+        uppercase: /[A-Z]/.test(password),
+        lowercase: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+        special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+    };
+
+    const score = Object.values(checks).filter(Boolean).length;
+    
+    let strength = 'weak';
+    let color = 'bg-red-500';
+    
+    if (score >= 5) {
+        strength = 'strong';
+        color = 'bg-green-500';
+    } else if (score >= 3) {
+        strength = 'medium';
+        color = 'bg-yellow-500';
+    }
+
+    return { checks, score, strength, color };
+};
+
+// Strong password generator
+const generateStrongPassword = () => {
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*_-+=';
+    
+    const allChars = uppercase + lowercase + numbers + special;
+    
+    // Ensure at least one of each type
+    let password = '';
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    
+    // Fill remaining characters (total length 12)
+    for (let i = password.length; i < 12; i++) {
+        password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+};
+
+// Email domain validator
+const validateEmailDomain = (email) => {
+    const allowedDomains = ['gmail.com', 'rbmi.in', 'yahoo.com', 'outlook.com', 'hotmail.com'];
+    const domain = email.split('@')[1]?.toLowerCase();
+    return allowedDomains.includes(domain);
+};
 
 
 /**
@@ -103,9 +166,57 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
     });
     const [showBulkUpload, setShowBulkUpload] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [passwordStrength, setPasswordStrength] = useState(null);
+    const [emailError, setEmailError] = useState('');
+    const [showDomainDropdown, setShowDomainDropdown] = useState(false);
+    const [emailUsername, setEmailUsername] = useState('');
+    const allowedDomains = ['gmail.com', 'rbmi.in', 'yahoo.com', 'outlook.com', 'hotmail.com'];
 
     const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+
+        // Validate password strength on change
+        if (name === 'password') {
+            if (value.length > 0) {
+                setPasswordStrength(validatePasswordStrength(value));
+            } else {
+                setPasswordStrength(null);
+            }
+        }
+
+        // Handle email input with domain dropdown
+        if (name === 'email') {
+            if (value.includes('@')) {
+                const parts = value.split('@');
+                setEmailUsername(parts[0]);
+                setShowDomainDropdown(false);
+                
+                if (!validateEmailDomain(value)) {
+                    setEmailError('Please use a valid email domain (gmail.com, rbmi.in, yahoo.com, outlook.com, hotmail.com)');
+                } else {
+                    setEmailError('');
+                }
+            } else {
+                setEmailUsername(value);
+                setShowDomainDropdown(value.length > 0);
+                setEmailError('');
+            }
+        }
+    };
+
+    const handleDomainSelect = (domain) => {
+        setFormData({ ...formData, email: `${emailUsername}@${domain}` });
+        setShowDomainDropdown(false);
+        setEmailError('');
+    };
+
+    const handleGeneratePassword = () => {
+        const newPassword = generateStrongPassword();
+        setFormData({ ...formData, password: newPassword });
+        setPasswordStrength(validatePasswordStrength(newPassword));
+        success('Strong password generated! Make sure to copy it.');
     };
 
     const handleBulkUploadSuccess = (result) => {
@@ -124,6 +235,18 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
+        // Validate email domain before submission
+        if (!validateEmailDomain(formData.email)) {
+            error('Please use a valid email domain (gmail.com, rbmi.in, yahoo.com, outlook.com, hotmail.com)');
+            return;
+        }
+
+        // Validate password strength
+        if (passwordStrength && passwordStrength.score < 3) {
+            error('Password is too weak. Please use a stronger password or generate one.');
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -296,18 +419,77 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                         />
                     </div>
                     <div className="col-span-1 md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email (Login ID)</label>
-                        <input 
-                            type="email" 
-                            name="email" 
-                            value={formData.email} 
-                            onChange={handleInputChange} 
-                            required 
-                            disabled={isSubmitting}
-                            autoComplete="off"
-                            placeholder="example@email.com"
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
-                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Email (Login ID) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <input 
+                                type="email" 
+                                name="email" 
+                                value={formData.email} 
+                                onChange={handleInputChange} 
+                                required 
+                                disabled={isSubmitting}
+                                autoComplete="off"
+                                placeholder="Type username (e.g., john.doe)"
+                                className={`w-full p-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 ${emailError ? 'border-red-500' : 'border-gray-300'}`}
+                                onFocus={() => {
+                                    if (!formData.email.includes('@') && formData.email.length > 0) {
+                                        setShowDomainDropdown(true);
+                                    }
+                                }}
+                            />
+                            
+                            {/* Domain Dropdown */}
+                            {showDomainDropdown && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                                    <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b text-xs font-medium text-gray-700 flex items-center justify-between">
+                                        <span>📧 Select your email domain:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDomainDropdown(false)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                    {allowedDomains.map((domain) => (
+                                        <button
+                                            key={domain}
+                                            type="button"
+                                            onClick={() => handleDomainSelect(domain)}
+                                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition flex items-center justify-between group border-b last:border-b-0"
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-semibold text-gray-800 group-hover:text-blue-600">
+                                                    {emailUsername}@{domain}
+                                                </span>
+                                                <span className="text-xs text-gray-500 mt-0.5">
+                                                    {domain === 'rbmi.in' && '🏫 Institute Domain'}
+                                                    {domain === 'gmail.com' && '📬 Most Popular'}
+                                                    {domain === 'yahoo.com' && '🌐 Yahoo Mail'}
+                                                    {domain === 'outlook.com' && '📧 Microsoft Outlook'}
+                                                    {domain === 'hotmail.com' && '📮 Hotmail'}
+                                                </span>
+                                            </div>
+                                            <span className="text-xs text-blue-500 group-hover:text-blue-700 font-medium">
+                                                Click →
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {emailError && (
+                            <div className="flex items-center mt-2 text-xs text-red-600">
+                                <AlertTriangle size={14} className="mr-1" />
+                                {emailError}
+                            </div>
+                        )}
+                        <div className="mt-2 text-xs text-gray-500">
+                            <span className="font-medium">💡 Tip:</span> Type your username, then select a domain from the dropdown
+                        </div>
                     </div>
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number (Optional)</label>
@@ -323,18 +505,82 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                         />
                     </div>
                     <div className="col-span-1 md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
-                        <input 
-                            type="password" 
-                            name="password" 
-                            value={formData.password} 
-                            onChange={handleInputChange} 
-                            required 
-                            disabled={isSubmitting}
-                            autoComplete="new-password"
-                            placeholder="Set temporary password"
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
-                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Temporary Password <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? "text" : "password"}
+                                name="password" 
+                                value={formData.password} 
+                                onChange={handleInputChange} 
+                                required 
+                                disabled={isSubmitting}
+                                autoComplete="new-password"
+                                placeholder="Set temporary password"
+                                className="w-full p-3 pr-24 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                            />
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="p-2 text-gray-500 hover:text-gray-700 transition"
+                                    title={showPassword ? "Hide password" : "Show password"}
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleGeneratePassword}
+                                    disabled={isSubmitting}
+                                    className="p-2 text-blue-600 hover:text-blue-700 transition disabled:opacity-50"
+                                    title="Generate strong password"
+                                >
+                                    <RefreshCw size={18} />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Password Strength Indicator */}
+                        {passwordStrength && (
+                            <div className="mt-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-gray-700">Password Strength:</span>
+                                    <span className={`text-xs font-bold uppercase ${
+                                        passwordStrength.strength === 'strong' ? 'text-green-600' :
+                                        passwordStrength.strength === 'medium' ? 'text-yellow-600' :
+                                        'text-red-600'
+                                    }`}>
+                                        {passwordStrength.strength === 'strong' && <span className="flex items-center"><ShieldCheck size={14} className="mr-1" />Strong</span>}
+                                        {passwordStrength.strength === 'medium' && <span className="flex items-center"><Key size={14} className="mr-1" />Medium</span>}
+                                        {passwordStrength.strength === 'weak' && <span className="flex items-center"><AlertTriangle size={14} className="mr-1" />Weak</span>}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                    <div 
+                                        className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
+                                        style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className={passwordStrength.checks.length ? 'text-green-600' : 'text-gray-400'}>
+                                        {passwordStrength.checks.length ? '✓' : '○'} At least 8 characters
+                                    </div>
+                                    <div className={passwordStrength.checks.uppercase ? 'text-green-600' : 'text-gray-400'}>
+                                        {passwordStrength.checks.uppercase ? '✓' : '○'} Uppercase letter
+                                    </div>
+                                    <div className={passwordStrength.checks.lowercase ? 'text-green-600' : 'text-gray-400'}>
+                                        {passwordStrength.checks.lowercase ? '✓' : '○'} Lowercase letter
+                                    </div>
+                                    <div className={passwordStrength.checks.number ? 'text-green-600' : 'text-gray-400'}>
+                                        {passwordStrength.checks.number ? '✓' : '○'} Number
+                                    </div>
+                                    <div className={passwordStrength.checks.special ? 'text-green-600' : 'text-gray-400'}>
+                                        {passwordStrength.checks.special ? '✓' : '○'} Special character
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -418,16 +664,44 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
         department: user.department || '',
         class_year: user.class_year || '',
         is_active: user.is_active !== undefined ? user.is_active : true,
+        password: '', // New password field (optional)
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [passwordStrength, setPasswordStrength] = useState(null);
+    const [showPasswordSection, setShowPasswordSection] = useState(false);
 
     const handleInputChange = (e) => {
-        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-        setFormData({ ...formData, [e.target.name]: value });
+        const { name, value } = e.target;
+        const finalValue = e.target.type === 'checkbox' ? e.target.checked : value;
+        setFormData({ ...formData, [name]: finalValue });
+
+        // Validate password strength on change
+        if (name === 'password') {
+            if (value.length > 0) {
+                setPasswordStrength(validatePasswordStrength(value));
+            } else {
+                setPasswordStrength(null);
+            }
+        }
+    };
+
+    const handleGeneratePassword = () => {
+        const newPassword = generateStrongPassword();
+        setFormData({ ...formData, password: newPassword });
+        setPasswordStrength(validatePasswordStrength(newPassword));
+        success('Strong password generated! Make sure to copy it.');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Validate password strength if password is being changed
+        if (formData.password && passwordStrength && passwordStrength.score < 3) {
+            error('Password is too weak. Please use a stronger password or generate one.');
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -439,6 +713,11 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
                 class_year: formData.class_year || null,
                 is_active: formData.is_active,
             };
+
+            // Only include password if it's being changed
+            if (formData.password) {
+                updateData.password = formData.password;
+            }
 
             await userAPI.updateUser(user.id, updateData);
             success(`User ${formData.first_name} ${formData.last_name} updated successfully!`);
@@ -591,6 +870,98 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
                         <label className="ml-2 block text-sm text-gray-700">
                             Active User (Uncheck to deactivate account)
                         </label>
+                    </div>
+
+                    {/* Password Reset Section */}
+                    <div className="border-t pt-4">
+                        <button
+                            type="button"
+                            onClick={() => setShowPasswordSection(!showPasswordSection)}
+                            className="flex items-center text-blue-600 hover:text-blue-700 font-medium text-sm mb-3"
+                        >
+                            <Key size={16} className="mr-2" />
+                            {showPasswordSection ? 'Cancel Password Reset' : 'Reset User Password'}
+                        </button>
+
+                        {showPasswordSection && (
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    New Password (Optional)
+                                </label>
+                                <div className="relative">
+                                    <input 
+                                        type={showPassword ? "text" : "password"}
+                                        name="password" 
+                                        value={formData.password} 
+                                        onChange={handleInputChange} 
+                                        disabled={isSubmitting}
+                                        autoComplete="new-password"
+                                        placeholder="Enter new password"
+                                        className="w-full p-3 pr-24 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                                    />
+                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="p-2 text-gray-500 hover:text-gray-700 transition"
+                                            title={showPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleGeneratePassword}
+                                            disabled={isSubmitting}
+                                            className="p-2 text-blue-600 hover:text-blue-700 transition disabled:opacity-50"
+                                            title="Generate strong password"
+                                        >
+                                            <RefreshCw size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* Password Strength Indicator */}
+                                {passwordStrength && formData.password && (
+                                    <div className="mt-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-medium text-gray-700">Password Strength:</span>
+                                            <span className={`text-xs font-bold uppercase ${
+                                                passwordStrength.strength === 'strong' ? 'text-green-600' :
+                                                passwordStrength.strength === 'medium' ? 'text-yellow-600' :
+                                                'text-red-600'
+                                            }`}>
+                                                {passwordStrength.strength === 'strong' && <span className="flex items-center"><ShieldCheck size={14} className="mr-1" />Strong</span>}
+                                                {passwordStrength.strength === 'medium' && <span className="flex items-center"><Key size={14} className="mr-1" />Medium</span>}
+                                                {passwordStrength.strength === 'weak' && <span className="flex items-center"><AlertTriangle size={14} className="mr-1" />Weak</span>}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div 
+                                                className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
+                                                style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className={passwordStrength.checks.length ? 'text-green-600' : 'text-gray-400'}>
+                                                {passwordStrength.checks.length ? '✓' : '○'} At least 8 characters
+                                            </div>
+                                            <div className={passwordStrength.checks.uppercase ? 'text-green-600' : 'text-gray-400'}>
+                                                {passwordStrength.checks.uppercase ? '✓' : '○'} Uppercase letter
+                                            </div>
+                                            <div className={passwordStrength.checks.lowercase ? 'text-green-600' : 'text-gray-400'}>
+                                                {passwordStrength.checks.lowercase ? '✓' : '○'} Lowercase letter
+                                            </div>
+                                            <div className={passwordStrength.checks.number ? 'text-green-600' : 'text-gray-400'}>
+                                                {passwordStrength.checks.number ? '✓' : '○'} Number
+                                            </div>
+                                            <div className={passwordStrength.checks.special ? 'text-green-600' : 'text-gray-400'}>
+                                                {passwordStrength.checks.special ? '✓' : '○'} Special character
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Action Buttons */}
