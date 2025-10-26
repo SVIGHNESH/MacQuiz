@@ -9,7 +9,7 @@ from app.services.quiz_service import check_quiz_availability
 
 router = APIRouter()
 
-@router.post("/", response_model=QuizResponse, dependencies=[Depends(require_role(["admin", "teacher"]))])
+@router.post("/", response_model=QuizResponse, dependencies=[Depends(require_role([RoleEnum.ADMIN, RoleEnum.TEACHER]))])
 async def create_quiz(
     quiz_data: QuizCreate,
     db: Session = Depends(get_db),
@@ -205,7 +205,7 @@ async def get_quiz(
     
     return quiz
 
-@router.put("/{quiz_id}", response_model=QuizResponse, dependencies=[Depends(require_role(["admin", "teacher"]))])
+@router.put("/{quiz_id}", response_model=QuizResponse, dependencies=[Depends(require_role([RoleEnum.ADMIN, RoleEnum.TEACHER]))])
 async def update_quiz(
     quiz_id: int,
     quiz_data: QuizUpdate,
@@ -239,7 +239,7 @@ async def update_quiz(
     
     return quiz
 
-@router.delete("/{quiz_id}", dependencies=[Depends(require_role(["admin", "teacher"]))])
+@router.delete("/{quiz_id}", dependencies=[Depends(require_role([RoleEnum.ADMIN, RoleEnum.TEACHER]))])
 async def delete_quiz(
     quiz_id: int,
     db: Session = Depends(get_db),

@@ -167,7 +167,7 @@ async def get_my_attempts(
     ).order_by(QuizAttempt.started_at.desc()).all()
     return attempts
 
-@router.get("/quiz/{quiz_id}", response_model=List[QuizAttemptResponse], dependencies=[Depends(require_role(["admin", "teacher"]))])
+@router.get("/quiz/{quiz_id}", response_model=List[QuizAttemptResponse], dependencies=[Depends(require_role([RoleEnum.ADMIN, RoleEnum.TEACHER]))])
 async def get_quiz_attempts(
     quiz_id: int,
     db: Session = Depends(get_db),
@@ -193,7 +193,7 @@ async def get_quiz_attempts(
     attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).all()
     return attempts
 
-@router.get("/student/{student_id}", response_model=List[QuizAttemptResponse], dependencies=[Depends(require_role(["admin", "teacher"]))])
+@router.get("/student/{student_id}", response_model=List[QuizAttemptResponse], dependencies=[Depends(require_role([RoleEnum.ADMIN, RoleEnum.TEACHER]))])
 async def get_student_attempts(
     student_id: int,
     db: Session = Depends(get_db),

@@ -224,7 +224,7 @@ Write-Host "Token: $TOKEN"
 
 ### Create a Teacher
 
-**Note: Endpoint requires trailing slash (`/`)**
+**Note: Endpoint requires trailing slash (`/`) and role must be uppercase**
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/users/" \
@@ -234,7 +234,7 @@ curl -X POST "http://localhost:8000/api/v1/users/" \
     "email": "teacher1@university.edu",
     "first_name": "John",
     "last_name": "Doe",
-    "role": "teacher",
+    "role": "TEACHER",
     "phone_number": "+1234567890",
     "department": "Computer Science",
     "password": "teacher123"
@@ -248,7 +248,7 @@ curl -X POST "http://localhost:8000/api/v1/users/" \
   "email": "teacher1@university.edu",
   "first_name": "John",
   "last_name": "Doe",
-  "role": "teacher",
+  "role": "TEACHER",
   "phone_number": "+1234567890",
   "department": "Computer Science",
   "created_at": "2025-10-26T12:00:00"
@@ -265,7 +265,7 @@ curl -X POST "http://localhost:8000/api/v1/users/" \
     "email": "student1@university.edu",
     "first_name": "Jane",
     "last_name": "Smith",
-    "role": "student",
+    "role": "STUDENT",
     "phone_number": "+1234567891",
     "student_id": "CS2021001",
     "department": "Computer Science",
@@ -282,11 +282,11 @@ curl -X GET "http://localhost:8000/api/v1/users/" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get only teachers
-curl -X GET "http://localhost:8000/api/v1/users/?role=teacher" \
+curl -X GET "http://localhost:8000/api/v1/users/?role=TEACHER" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get only students
-curl -X GET "http://localhost:8000/api/v1/users/?role=student" \
+curl -X GET "http://localhost:8000/api/v1/users/?role=STUDENT" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -684,7 +684,7 @@ curl -X GET "http://localhost:8000/api/v1/users/" \
   -H "Authorization: Bearer $TOKEN"
 
 # Filter users by role
-curl -X GET "http://localhost:8000/api/v1/users/?role=teacher" \
+curl -X GET "http://localhost:8000/api/v1/users/?role=TEACHER" \
   -H "Authorization: Bearer $TOKEN"
 
 # Create subject

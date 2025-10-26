@@ -133,13 +133,13 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 password: formData.password,
                 first_name: formData.first_name,
                 last_name: formData.last_name,
-                role: formData.role.toLowerCase(),
+                role: formData.role.toUpperCase(),
                 department: formData.department,
                 class_year: formData.class_year,
             };
 
             // Add student_id only for students
-            if (formData.role.toLowerCase() === 'student') {
+            if (formData.role.toUpperCase() === 'student') {
                 userData.student_id = formData.student_id;
             }
 

@@ -3,21 +3,22 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
-# Enums
+# Enums - Updated to match database uppercase values
 class RoleEnum(str, Enum):
-    ADMIN = "admin"
-    TEACHER = "teacher"
-    STUDENT = "student"
+    ADMIN = "ADMIN"
+    TEACHER = "TEACHER"
+    STUDENT = "STUDENT"
 
 class QuestionTypeEnum(str, Enum):
-    MCQ = "mcq"
-    TRUE_FALSE = "true_false"
-    SHORT_ANSWER = "short_answer"
+    SINGLE_CHOICE = "SINGLE_CHOICE"
+    MULTIPLE_CHOICE = "MULTIPLE_CHOICE"
+    TRUE_FALSE = "TRUE_FALSE"
+    SHORT_ANSWER = "SHORT_ANSWER"
 
 class DifficultyLevel(str, Enum):
-    EASY = "easy"
-    MEDIUM = "medium"
-    HARD = "hard"
+    EASY = "EASY"
+    MEDIUM = "MEDIUM"
+    HARD = "HARD"
 
 # User Schemas
 class UserBase(BaseModel):
