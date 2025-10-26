@@ -5,9 +5,9 @@ from app.db.database import Base
 import enum
 
 class RoleEnum(enum.Enum):
-    ADMIN = "admin"
-    TEACHER = "teacher"
-    STUDENT = "student"
+    ADMIN = "ADMIN"
+    TEACHER = "TEACHER"
+    STUDENT = "STUDENT"
 
 class User(Base):
     __tablename__ = "users"

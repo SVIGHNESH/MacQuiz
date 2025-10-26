@@ -91,7 +91,7 @@ QuizzApp-RBMI/
 
 - Python 3.9 or higher
 - Node.js 16 or higher
-- MySQL 8.0 or higher (NEW)
+- MySQL 8.0 or higher (NEW)myd
 
 ### Database Setup (NEW)
 
