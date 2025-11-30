@@ -5,6 +5,9 @@ import { ToastProvider } from "./context/ToastContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import Login from "./pages/login";
 import GlobalDashboard from "./pages/GlobalDashboard";
+import QuizCreator from "./pages/QuizCreator";
+import QuizTaker from "./pages/QuizTaker";
+import QuizResult from "./pages/QuizResult";
 
 export default function App() {
   return (
@@ -27,6 +30,38 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <GlobalDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quiz/create" 
+              element={
+                <ProtectedRoute>
+                  <QuizCreator />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quiz/edit/:quizId" 
+              element={
+                <ProtectedRoute>
+                  <QuizCreator />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quiz/:quizId/take" 
+              element={
+                <ProtectedRoute>
+                  <QuizTaker />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quiz-result/:attemptId" 
+              element={
+                <ProtectedRoute>
+                  <QuizResult />
                 </ProtectedRoute>
               } 
             />

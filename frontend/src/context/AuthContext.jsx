@@ -22,9 +22,12 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error('Auth check failed:', error);
-            authAPI.logout();
-            setIsAuthenticated(false);
-            setUser(null);
+            // Only logout on 401 (Unauthorized), not on other errors
+            if (error.status === 401) {
+                authAPI.logout();
+                setIsAuthenticated(false);
+                setUser(null);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -34,14 +37,29 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await authAPI.login(email, password);
             if (response.access_token) {
-                // Use the user data from login response (backend v2.0 includes it)
-                const userData = response.user;
-                setUser(userData);
-                setIsAuthenticated(true);
-                return { success: true, user: userData };
+                // Fetch the current user data to ensure we have complete info
+                try {
+                    const userData = await userAPI.getCurrentUser();
+                    setUser(userData);
+                    setIsAuthenticated(true);
+                    return { success: true, user: userData };
+                } catch (userError) {
+                    console.error('Failed to fetch user data after login:', userError);
+                    // Fallback to response user data if available
+                    const userData = response.user;
+                    if (userData) {
+                        setUser(userData);
+                        setIsAuthenticated(true);
+                        return { success: true, user: userData };
+                    }
+                    throw userError;
+                }
             }
+            return { success: false, error: 'No access token received' };
         } catch (error) {
             console.error('Login error:', error);
+            setIsAuthenticated(false);
+            setUser(null);
             return { success: false, error };
         }
     };

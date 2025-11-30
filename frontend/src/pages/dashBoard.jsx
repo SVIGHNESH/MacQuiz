@@ -2,24 +2,18 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { userAPI } from "../services/api";
+import { userAPI, quizAPI, attemptAPI } from "../services/api";
+import { getDepartments } from "../utils/settingsHelper";
 import BulkUploadModal from "../components/BulkUploadModal";
+import BulkQuizUploadModal from "../components/BulkQuizUploadModal";
+import QuizAssignmentModal from "../components/QuizAssignmentModal";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
-    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet
 } from 'lucide-react';
 
-/**
- * --- MOCK DATA ---
- * Initializing all data to N/A or 0 until the administrator provisions users/quizzes.
- */
-
-const mockActivity = []; // No activity until users are added
-
-// Mock data for the new Activity Tracker Table
-const mockTeacherData = []; // Detaabase mein data save hone tak khali
-const mockStudentData = []; // Detaabase mein data save hone tak khali
+// No mock data needed - all data fetched from API
 
 /**
  * --- UTILITY FUNCTIONS ---
@@ -151,8 +145,8 @@ const AddNewUserCard = ({ onAddClick }) => (
 );
 
 // New Component: Form for creating new users
-const UserCreationForm = ({ onCancel, onUserCreated }) => {
-    const { success, error } = useToast();
+const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
+    const { success, error} = useToast();
     const [formData, setFormData] = useState({
         role: 'student', // Default role (lowercase for API)
         first_name: '',
@@ -321,54 +315,64 @@ const UserCreationForm = ({ onCancel, onUserCreated }) => {
                 onSuccess={handleBulkUploadSuccess}
             />
 
-            {/* New Bulk Upload Button */}
-            <div className="border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl mb-8">
-                <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3">
-                        <Upload size={24} className="text-blue-600 mt-1" />
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800 mb-2">
-                                Bulk User Upload
-                            </h3>
-                            <p className="text-sm text-gray-600 mb-3">
-                                Upload a CSV file to add multiple users at once. Preview data, detect duplicates, and validate before importing.
-                            </p>
-                            <ul className="text-xs text-gray-500 space-y-1">
-                                <li>• Real-time validation and duplicate detection</li>
-                                <li>• Preview imported data before uploading</li>
-                                <li>• Automatic error reporting with line numbers</li>
-                            </ul>
+            {/* Bulk Upload Button - Admin Only */}
+            {currentUserRole === 'admin' && (
+                <>
+                    <div className="border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl mb-8">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-3">
+                                <Upload size={24} className="text-blue-600 mt-1" />
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-2">
+                                        Bulk User Upload
+                                    </h3>
+                                    <p className="text-sm text-gray-600 mb-3">
+                                        Upload a CSV file to add multiple users at once. Preview data, detect duplicates, and validate before importing.
+                                    </p>
+                                    <ul className="text-xs text-gray-500 space-y-1">
+                                        <li>• Real-time validation and duplicate detection</li>
+                                        <li>• Preview imported data before uploading</li>
+                                        <li>• Automatic error reporting with line numbers</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowBulkUpload(true)}
+                                disabled={isSubmitting}
+                                className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg whitespace-nowrap disabled:opacity-50"
+                            >
+                                <Upload size={20} className="mr-2" />
+                                Bulk Upload
+                            </button>
                         </div>
                     </div>
-                    <button
-                        onClick={() => setShowBulkUpload(true)}
-                        disabled={isSubmitting}
-                        className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg whitespace-nowrap disabled:opacity-50"
-                    >
-                        <Upload size={20} className="mr-2" />
-                        Bulk Upload
-                    </button>
-                </div>
-            </div>
-
-            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Or, Add Single User Manually</h3>
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Or, Add Single User Manually</h3>
+                </>
+            )}
+            
+            {currentUserRole === 'teacher' && (
+                <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Add New Student</h3>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-                {/* User Role Selector */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
-                    <select 
-                        name="role" 
-                        value={formData.role} 
-                        onChange={handleInputChange} 
-                        required 
-                        disabled={isSubmitting}
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-blue-50 ring-2 ring-blue-500 font-semibold disabled:bg-gray-100"
-                    >
-                        <option value="teacher">Teacher / Professor</option>
-                        <option value="student">Student</option>
-                    </select>
-                </div>
+                {/* User Role Selector - Admin Only */}
+                {currentUserRole === 'admin' && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
+                        <select 
+                            name="role" 
+                            value={formData.role} 
+                            onChange={handleInputChange} 
+                            required 
+                            disabled={isSubmitting}
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-blue-50 ring-2 ring-blue-500 font-semibold disabled:bg-gray-100"
+                        >
+                            <option value="teacher">Teacher / Professor</option>
+                            <option value="admin">Admin</option>
+                            <option value="student">Student</option>
+                        </select>
+                    </div>
+                )}
 
                 {/* Student ID field (shown first for students) */}
                 {formData.role === 'student' && (
@@ -721,7 +725,7 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
 
             await userAPI.updateUser(user.id, updateData);
             success(`User ${formData.first_name} ${formData.last_name} updated successfully!`);
-            onSuccess();
+            if (onSuccess) onSuccess();
         } catch (err) {
             if (err.status === 400) {
                 error(err.data?.detail || "Failed to update user");
@@ -1439,18 +1443,47 @@ const UserActivityTable = ({ userType }) => {
 
 // Component for Detailed Reports Tab
 const DetailedReportsTool = () => {
-    // Mock data for filter options
-    const departments = ['All', 'CS Engg.', 'AI', 'Mechanical', 'Electrical'];
+    const { error } = useToast();
+    
+    // Get departments from settings with error handling
+    let departmentOptions = ['All'];
+    try {
+        departmentOptions = ['All', ...getDepartments()];
+    } catch (err) {
+        console.error('Failed to load departments:', err);
+        departmentOptions = ['All', 'Computer Science Engg.', 'Mechanical Engineering', 'Electrical Engineering'];
+    }
     const years = ['All', '1st Year', '2nd Year', '3rd Year', '4th Year'];
-    // const semesters = ['All', 'Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8']; // REMOVED STATIC ARRAY
 
-    const [classYear, setClassYear] = useState(years[0]);
-    const [department, setDepartment] = useState(departments[0]);
-    const [semester, setSemester] = useState('All'); // Initialized to 'All'
+    const [classYear, setClassYear] = useState('All');
+    const [department, setDepartment] = useState('All');
+    const [semester, setSemester] = useState('All');
     const [reportOutput, setReportOutput] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [reportData, setReportData] = useState(null);
+    const [allUsers, setAllUsers] = useState([]);
+    const [allQuizzes, setAllQuizzes] = useState([]);
+    const [allAttempts, setAllAttempts] = useState([]);
 
-    // --- NEW LOGIC TO CALCULATE SEMESTER OPTIONS BASED ON YEAR ---
+    // Fetch real data on component mount
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [users, quizzes] = await Promise.all([
+                    userAPI.getAllUsers(),
+                    quizAPI.getAllQuizzes()
+                ]);
+                setAllUsers(users || []);
+                setAllQuizzes(quizzes || []);
+            } catch (err) {
+                console.error('Failed to fetch data:', err);
+                error('Failed to load report data');
+            }
+        };
+        fetchData();
+    }, []);
+
+    // Calculate semester options based on year
     const availableSemesters = useMemo(() => {
         const baseOptions = ['All'];
         if (classYear === 'All') {
@@ -1468,48 +1501,107 @@ const DetailedReportsTool = () => {
         return [...baseOptions, ...yearSemesters.map(sem => `Sem ${sem}`)];
     }, [classYear]);
 
-    // Effect to reset semester when classYear changes, if the current semester is no longer valid
+    // Reset semester when class year changes
     useEffect(() => {
         if (!availableSemesters.includes(semester)) {
             setSemester('All');
         }
     }, [classYear, availableSemesters, semester]);
-    // -------------------------------------------------------------------
 
+    // Function to generate real report data based on filters
+    const generateReportData = () => {
+        // Filter students based on selections
+        let filteredStudents = allUsers.filter(u => u.role === 'student');
+        
+        if (department !== 'All') {
+            filteredStudents = filteredStudents.filter(s => s.department === department);
+        }
+        
+        if (classYear !== 'All') {
+            filteredStudents = filteredStudents.filter(s => s.class_year === classYear);
+        }
 
-    // Function to simulate report data based on filters
-    const generateMockReportData = () => {
-        // Return a sample of data that Gemini will analyze
-        return `Report Data for ${classYear}, ${department}, Semester ${semester}:
-        - ${classYear} ${department} Average Score: 68% (5% decrease vs last month).
-        - Top 3 failing topics: 'Algorithms', 'Data Structures', 'Thermodynamics'.
-        - Overall Quiz completion rate: 75%.
-        - 12 students achieved A+ grade.
-        - Teacher Activity (CS Engg.): Prof. A has not submitted a quiz in 4 weeks.
-        - Need to address low attendance in 2nd Year Electrical Engineering.`;
+        // Get quiz statistics
+        const activeQuizzes = allQuizzes.filter(q => q.is_active);
+        const totalQuizzes = allQuizzes.length;
+        const totalAttempts = allQuizzes.reduce((sum, q) => sum + (q.attempts || 0), 0);
+        
+        // Calculate average completion rate
+        const potentialAttempts = filteredStudents.length * activeQuizzes.length;
+        const completionRate = potentialAttempts > 0 ? ((totalAttempts / potentialAttempts) * 100).toFixed(1) : 0;
+
+        // Get teacher statistics
+        const teachers = allUsers.filter(u => u.role === 'teacher');
+        const teachersWithQuizzes = teachers.filter(t => 
+            allQuizzes.some(q => q.creator_id === t.id)
+        );
+        const inactiveTeachers = teachers.length - teachersWithQuizzes.length;
+
+        return {
+            totalStudents: filteredStudents.length,
+            totalQuizzes,
+            activeQuizzes: activeQuizzes.length,
+            totalAttempts,
+            completionRate,
+            totalTeachers: teachers.length,
+            activeTeachers: teachersWithQuizzes.length,
+            inactiveTeachers,
+            filters: { classYear, department, semester }
+        };
     };
 
-    // Function to call the Gemini API
+    // Function to analyze report and generate insights
     const analyzeReport = async () => {
         setIsGenerating(true);
         setReportOutput(null);
 
-        // 1. Get the mock report data (which would normally come from a database query)
-        const mockData = generateMockReportData();
+        // Generate report data from actual system data
+        const data = generateReportData();
+        setReportData(data);
 
-        // For now, using simulated analysis since Gemini API key is not provided
-        // In production, you would uncomment the API call below
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
+        // Simulate analysis delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
-        const simulatedAnalysis = `### Analysis for ${classYear} / ${department} / ${semester}
-* **Targeted Remedial Action:** Focus on offering short, mandatory tutorials for students in **${classYear}** struggling with 'Algorithms' and 'Data Structures' to prevent cumulative failure.
-* **Faculty Engagement Review:** Immediately follow up with **Prof. A (CS Engg.)** regarding the missing quiz submissions, as this directly impacts the overall completion rate.
-* **Attendance Policy Reinforcement:** Implement a check-in process for **2nd Year Electrical Engineering** to address low attendance trends, potentially linking it to sessional marks.
-* **A+ Student Utilization:** Launch a peer-tutoring initiative, leveraging the **12 A+ grade students** to mentor underperforming peers, improving overall class performance.
----
-**Raw Data Preview:** ${mockData.substring(0, 100)}...`;
+        // Generate AI-style insights based on real data
+        const insights = [];
+        
+        // Insight 1: Student Engagement
+        if (data.completionRate < 50) {
+            insights.push(`**🎯 Low Engagement Alert:** Only ${data.completionRate}% quiz completion rate detected for **${classYear === 'All' ? 'all students' : classYear}** ${department !== 'All' ? `in ${department}` : ''}. Consider implementing mandatory quiz policies or increasing grade weightage to improve participation.`);
+        } else if (data.completionRate > 80) {
+            insights.push(`**✨ Excellent Engagement:** ${data.completionRate}% completion rate shows strong student participation. Maintain current assessment strategies and consider expanding quiz offerings.`);
+        } else {
+            insights.push(`**📊 Moderate Engagement:** ${data.completionRate}% completion rate is acceptable but has room for improvement. Consider adding incentives or reducing quiz difficulty to boost participation.`);
+        }
 
-        setReportOutput(simulatedAnalysis);
+        // Insight 2: Teacher Activity
+        if (data.inactiveTeachers > 0) {
+            insights.push(`**⚠️ Faculty Engagement Gap:** ${data.inactiveTeachers} out of ${data.totalTeachers} teachers have not created any quizzes. Schedule training sessions or provide quiz templates to encourage quiz creation.`);
+        } else {
+            insights.push(`**👏 Full Faculty Participation:** All ${data.totalTeachers} teachers are actively creating assessments. Excellent team engagement!`);
+        }
+
+        // Insight 3: Quiz Availability
+        if (data.activeQuizzes === 0) {
+            insights.push(`**🚨 No Active Quizzes:** There are currently no active quizzes available to students. Activate existing quizzes or create new assessments to maintain continuous learning.`);
+        } else if (data.activeQuizzes < 3) {
+            insights.push(`**📚 Limited Assessment Options:** Only ${data.activeQuizzes} active quiz(es) available. Consider creating more diverse assessments to cover different topics and difficulty levels.`);
+        } else {
+            insights.push(`**✅ Healthy Assessment Pipeline:** ${data.activeQuizzes} active quizzes provide good variety. Ensure they cover all key topics and difficulty levels.`);
+        }
+
+        // Insight 4: Student Base
+        if (data.totalStudents === 0) {
+            insights.push(`**👥 No Students Found:** No students match the selected filters. Adjust your filter criteria or ensure students are properly registered in the system.`);
+        } else if (data.totalStudents < 10) {
+            insights.push(`**📈 Small Cohort:** ${data.totalStudents} students in this segment. Consider personalized attention and targeted interventions for maximum impact.`);
+        } else {
+            insights.push(`**👨‍🎓 Student Base:** ${data.totalStudents} students in selected cohort. This sample size allows for meaningful statistical analysis and trend identification.`);
+        }
+
+        const analysis = `### 📊 Analytical Insights for ${classYear} / ${department} / ${semester}\n\n${insights.map((i, idx) => `${idx + 1}. ${i}`).join('\n\n')}\n\n---\n**📌 Summary Statistics:**\n- Total Students: ${data.totalStudents}\n- Total Quizzes: ${data.totalQuizzes} (${data.activeQuizzes} active)\n- Total Attempts: ${data.totalAttempts}\n- Completion Rate: ${data.completionRate}%\n- Active Teachers: ${data.activeTeachers}/${data.totalTeachers}`;
+
+        setReportOutput(analysis);
         setIsGenerating(false);
 
         /* Uncomment this section when you have a Gemini API key:
@@ -1579,7 +1671,7 @@ const DetailedReportsTool = () => {
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                     <select value={department} onChange={(e) => setDepartment(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600">
-                        {departments.map(dept => (<option key={dept}>{dept}</option>))}
+                        {departmentOptions.map(dept => (<option key={dept}>{dept}</option>))}
                     </select>
                 </div>
                 <div>
@@ -1609,9 +1701,60 @@ const DetailedReportsTool = () => {
                 </div>
             </div>
 
+            {/* Statistics Cards */}
+            {reportData && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 border-t pt-6">
+                    {/* Total Students Card */}
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-xl shadow-lg text-white">
+                        <div className="flex items-center justify-between mb-2">
+                            <Users size={28} className="opacity-80" />
+                            <span className="text-3xl font-bold">{reportData.totalStudents}</span>
+                        </div>
+                        <p className="text-sm opacity-90 font-medium">Total Students</p>
+                        <p className="text-xs opacity-75 mt-1">In selected cohort</p>
+                    </div>
+
+                    {/* Total Quizzes Card */}
+                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-5 rounded-xl shadow-lg text-white">
+                        <div className="flex items-center justify-between mb-2">
+                            <FileText size={28} className="opacity-80" />
+                            <span className="text-3xl font-bold">{reportData.totalQuizzes}</span>
+                        </div>
+                        <p className="text-sm opacity-90 font-medium">Total Quizzes</p>
+                        <p className="text-xs opacity-75 mt-1">{reportData.activeQuizzes} currently active</p>
+                    </div>
+
+                    {/* Completion Rate Card */}
+                    <div className={`bg-gradient-to-br ${
+                        reportData.completionRate >= 80 ? 'from-green-500 to-green-600' :
+                        reportData.completionRate >= 50 ? 'from-yellow-500 to-yellow-600' :
+                        'from-red-500 to-red-600'
+                    } p-5 rounded-xl shadow-lg text-white`}>
+                        <div className="flex items-center justify-between mb-2">
+                            <TrendingUp size={28} className="opacity-80" />
+                            <span className="text-3xl font-bold">{reportData.completionRate}%</span>
+                        </div>
+                        <p className="text-sm opacity-90 font-medium">Completion Rate</p>
+                        <p className="text-xs opacity-75 mt-1">{reportData.totalAttempts} total attempts</p>
+                    </div>
+
+                    {/* Teacher Activity Card */}
+                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 rounded-xl shadow-lg text-white">
+                        <div className="flex items-center justify-between mb-2">
+                            <GraduationCap size={28} className="opacity-80" />
+                            <span className="text-3xl font-bold">{reportData.activeTeachers}/{reportData.totalTeachers}</span>
+                        </div>
+                        <p className="text-sm opacity-90 font-medium">Active Teachers</p>
+                        <p className="text-xs opacity-75 mt-1">
+                            {reportData.inactiveTeachers === 0 ? 'Full participation!' : `${reportData.inactiveTeachers} inactive`}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Gemini Analysis Output */}
             <div className="border-t pt-6 space-y-4">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4">Actionable Insights (Powered by Gemini)</h3>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Actionable Insights (Powered by AI)</h3>
 
                 {/* Reverted BG and border to light blue */}
                 <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-200 min-h-[150px] flex items-center justify-center">
@@ -1629,11 +1772,1435 @@ const DetailedReportsTool = () => {
     );
 };
 
+// Quiz Management Component
+// Teacher Quiz Management - Create and manage own quizzes
+const TeacherStudentsView = () => {
+    const { user } = useAuth();
+    const { error } = useToast();
+    const navigate = useNavigate();
+    const [students, setStudents] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [showAddForm, setShowAddForm] = useState(false);
+
+    useEffect(() => {
+        if (!showAddForm) {
+            fetchTeacherStudents();
+        }
+    }, [showAddForm]);
+
+    const fetchTeacherStudents = async () => {
+        setIsLoading(true);
+        try {
+            // Get all quizzes created by this teacher
+            const quizzes = await quizAPI.getAllQuizzes();
+            const teacherQuizIds = quizzes.map(q => q.id);
+
+            // Get all users
+            const allUsers = await userAPI.getAllUsers();
+            
+            // Filter to show only students
+            const studentsList = allUsers.filter(u => u.role === 'student');
+            setStudents(studentsList);
+        } catch (err) {
+            error('Failed to load students');
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleUserCreated = () => {
+        setShowAddForm(false);
+        fetchTeacherStudents();
+    };
+
+    if (showAddForm) {
+        return (
+            <UserCreationForm 
+                onCancel={() => setShowAddForm(false)}
+                onUserCreated={handleUserCreated}
+                currentUserRole="teacher"
+            />
+        );
+    }
+
+    return (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">My Students</h2>
+                    <p className="text-gray-600 mt-1">View and manage your students</p>
+                </div>
+                <button
+                    onClick={() => setShowAddForm(true)}
+                    className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
+                >
+                    <Plus size={20} className="mr-2" />
+                    Add Student
+                </button>
+            </div>
+
+            {isLoading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Loading students...</p>
+                </div>
+            ) : students.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-50 border-b-2 border-gray-200">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Student ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Department</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Year</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {students.map((student) => (
+                                <tr key={student.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="font-semibold text-gray-900">{student.first_name} {student.last_name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                        {student.student_id || 'N/A'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                        {student.email}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                        {student.department || 'N/A'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                        {student.class_year || 'N/A'}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="text-center py-12 text-gray-500">
+                    <AlertCircle size={48} className="mx-auto mb-4 text-gray-400" />
+                    <p>No students found</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const TeacherQuizManagement = () => {
+    const navigate = useNavigate();
+    const { success, error } = useToast();
+    const [quizzes, setQuizzes] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [showBulkUpload, setShowBulkUpload] = useState(false);
+    const [assignQuizModal, setAssignQuizModal] = useState({ open: false, quiz: null });
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    useEffect(() => {
+        fetchQuizzes();
+    }, [refreshTrigger]);
+
+    const fetchQuizzes = async () => {
+        setIsLoading(true);
+        try {
+            console.log('Fetching quizzes...');
+            const data = await quizAPI.getAllQuizzes();
+            console.log('Quizzes loaded:', data);
+            setQuizzes(data || []);
+        } catch (err) {
+            console.error('Failed to load quizzes:', err);
+            error(`Failed to load quizzes: ${err.data?.detail || err.message || 'Unknown error'}`);
+            setQuizzes([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteQuiz = async (quizId) => {
+        if (!window.confirm('Are you sure you want to delete this quiz?')) return;
+        
+        try {
+            console.log(`Attempting to delete quiz ${quizId}...`);
+            await quizAPI.deleteQuiz(quizId);
+            console.log('Delete successful');
+            success('Quiz deleted successfully');
+            setRefreshTrigger(prev => prev + 1);
+        } catch (err) {
+            console.error('Failed to delete quiz:', err);
+            error(`Failed to delete quiz: ${err.data?.detail || err.message || 'Unknown error'}`);
+        }
+    };
+
+    const handleToggleQuizStatus = async (quizId, currentStatus) => {
+        const action = currentStatus ? 'deactivate' : 'activate';
+        if (!window.confirm(`Are you sure you want to ${action} this quiz?${!currentStatus ? ' Students will be able to see and take it.' : ' Students will no longer be able to take it.'}`)) return;
+        
+        try {
+            console.log(`Attempting to ${action} quiz ${quizId}...`);
+            const result = await quizAPI.updateQuiz(quizId, { is_active: !currentStatus });
+            console.log('Update result:', result);
+            success(`Quiz ${action}d successfully! ${!currentStatus ? 'Students can now take this quiz.' : 'Quiz is now hidden from students.'}`);
+            setRefreshTrigger(prev => prev + 1);
+        } catch (err) {
+            console.error(`Failed to ${action} quiz:`, err);
+            error(`Failed to ${action} quiz: ${err.data?.detail || err.message || 'Unknown error'}`);
+        }
+    };
+
+    const handleBulkUploadSuccess = (result) => {
+        if (result.success > 0) {
+            success(`Successfully uploaded ${result.success} quiz${result.success !== 1 ? 'zes' : ''}!`);
+        }
+        if (result.failed > 0 && result.failedQuizzes && result.failedQuizzes.length > 0) {
+            // Show each failed quiz with its error
+            result.failedQuizzes.forEach((failedQuiz, idx) => {
+                setTimeout(() => {
+                    error(`Failed: ${failedQuiz.title}\nReason: ${failedQuiz.error}`);
+                }, idx * 100); // Stagger the error notifications
+            });
+            console.error('Failed quizzes details:', result.failedQuizzes);
+        } else if (result.failed > 0) {
+            error(`${result.failed} quiz${result.failed !== 1 ? 'zes' : ''} failed to upload`);
+        }
+        setRefreshTrigger(prev => prev + 1);
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-lg p-8">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Quiz Management</h2>
+                        <p className="text-gray-600 mt-1">Create and manage quizzes for students</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setRefreshTrigger(prev => prev + 1)}
+                            className="flex items-center px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition shadow-md"
+                            title="Refresh quiz list"
+                        >
+                            <RefreshCw size={20} />
+                        </button>
+                        <button
+                            onClick={() => setShowBulkUpload(true)}
+                            className="flex items-center px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition shadow-lg"
+                        >
+                            <Upload size={20} className="mr-2" />
+                            Bulk Upload
+                        </button>
+                        <button
+                            onClick={() => navigate('/quiz/create')}
+                            className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
+                        >
+                            <Plus size={20} className="mr-2" />
+                            Create New Quiz
+                        </button>
+                    </div>
+                </div>
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-500">Loading quizzes...</p>
+                    </div>
+                ) : quizzes.length === 0 ? (
+                    <div className="text-center py-20">
+                        <FileText size={64} className="mx-auto mb-4 text-gray-300" />
+                        <h3 className="text-xl font-semibold text-gray-600 mb-2">No Quizzes Yet</h3>
+                        <p className="text-gray-500 mb-6">Start by creating your first quiz for students</p>
+                        <button
+                            onClick={() => navigate('/quiz/create')}
+                            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
+                        >
+                            <Plus size={20} className="mr-2" />
+                            Create First Quiz
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {quizzes.map((quiz) => (
+                            <div key={quiz.id} className={`border-2 rounded-xl p-6 transition ${
+                                quiz.is_active 
+                                    ? 'border-green-200 bg-green-50/30 hover:border-green-300' 
+                                    : 'border-gray-200 bg-gray-50/30 hover:border-gray-300'
+                            }`}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3">
+                                            <h3 className="text-xl font-bold text-gray-900">{quiz.title}</h3>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                                quiz.is_active 
+                                                    ? 'bg-green-100 text-green-800' 
+                                                    : 'bg-gray-200 text-gray-600'
+                                            }`}>
+                                                {quiz.is_active ? '🟢 LIVE' : '⚪ Inactive'}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-600 mt-1">{quiz.description}</p>
+                                        <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                                            <span className="flex items-center">
+                                                <FileText size={16} className="mr-1" />
+                                                {quiz.questions?.length || quiz.total_questions || 0} Questions
+                                            </span>
+                                            <span className="flex items-center">
+                                                <Clock size={16} className="mr-1" />
+                                                {quiz.duration_minutes || 30} mins
+                                            </span>
+                                            <span className="flex items-center">
+                                                <Users size={16} className="mr-1" />
+                                                {quiz.attempts || 0} Attempts
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        {quiz.is_active ? (
+                                            <button 
+                                                onClick={() => handleToggleQuizStatus(quiz.id, quiz.is_active)}
+                                                className="px-3 py-2 rounded-lg font-semibold transition text-sm text-orange-600 hover:bg-orange-50 border border-orange-200"
+                                            >
+                                                🔴 Stop
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setAssignQuizModal({ open: true, quiz })}
+                                                className="px-3 py-2 rounded-lg font-semibold transition text-sm text-green-600 hover:bg-green-50 border border-green-200"
+                                            >
+                                                🟢 Go Live
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={() => navigate(`/quiz/${quiz.id}/take`)}
+                                            className="px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold transition text-sm"
+                                        >
+                                            Preview
+                                        </button>
+                                        <button 
+                                            onClick={() => navigate(`/quiz/edit/${quiz.id}`)}
+                                            className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition text-sm"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteQuiz(quiz.id)}
+                                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg font-semibold transition text-sm"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Bulk Quiz Upload Modal */}
+            <BulkQuizUploadModal
+                isOpen={showBulkUpload}
+                onClose={() => setShowBulkUpload(false)}
+                onSuccess={handleBulkUploadSuccess}
+            />
+
+            {/* Quiz Assignment Modal */}
+            <QuizAssignmentModal
+                isOpen={assignQuizModal.open}
+                quiz={assignQuizModal.quiz}
+                onClose={() => setAssignQuizModal({ open: false, quiz: null })}
+                onSuccess={() => {
+                    success('Quiz assignment updated successfully!');
+                    fetchQuizzes();
+                }}
+            />
+        </div>
+    );
+};
+
+// Admin Quiz Monitoring - View all teachers' work
+const AdminQuizMonitoring = () => {
+    const { error } = useToast();
+    const [quizzes, setQuizzes] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [filterTeacher, setFilterTeacher] = useState('all');
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    useEffect(() => {
+        fetchData();
+    }, [refreshTrigger]);
+
+    const fetchData = async () => {
+        setIsLoading(true);
+        try {
+            const [quizzesData, usersData] = await Promise.all([
+                quizAPI.getAllQuizzes(),
+                userAPI.getAllUsers()
+            ]);
+            setQuizzes(quizzesData || []);
+            setUsers(usersData || []);
+        } catch (err) {
+            console.error('Dashboard data error:', err);
+            console.error('Error details:', err.data);
+            console.error('Error status:', err.status);
+            error(err.data?.detail || err.message || 'Failed to load data');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const teachers = users.filter(u => u.role === 'teacher');
+    const filteredQuizzes = filterTeacher === 'all' 
+        ? quizzes 
+        : quizzes.filter(q => q.creator_id === parseInt(filterTeacher));
+
+    // Group quizzes by teacher
+    const quizzesByTeacher = teachers.map(teacher => ({
+        teacher,
+        quizzes: quizzes.filter(q => q.creator_id === teacher.id),
+        totalQuizzes: quizzes.filter(q => q.creator_id === teacher.id).length,
+        totalAttempts: quizzes.filter(q => q.creator_id === teacher.id)
+            .reduce((sum, q) => sum + (q.attempts || 0), 0)
+    }));
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-lg p-8">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Quiz Monitoring Dashboard</h2>
+                        <p className="text-gray-600 mt-1">Monitor all teachers' quiz activities</p>
+                    </div>
+                    <button
+                        onClick={() => setRefreshTrigger(prev => prev + 1)}
+                        className="flex items-center px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition shadow-md"
+                        title="Refresh data"
+                    >
+                        <RefreshCw size={20} className="mr-2" />
+                        Refresh
+                    </button>
+                </div>
+
+                {/* Teacher Performance Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-blue-50 p-4 rounded-xl">
+                        <div className="text-sm text-blue-600 font-semibold">Total Teachers</div>
+                        <div className="text-3xl font-bold text-blue-900 mt-1">{teachers.length}</div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-xl">
+                        <div className="text-sm text-green-600 font-semibold">Total Quizzes</div>
+                        <div className="text-3xl font-bold text-green-900 mt-1">{quizzes.length}</div>
+                    </div>
+                    <div className="bg-purple-50 p-4 rounded-xl">
+                        <div className="text-sm text-purple-600 font-semibold">Total Attempts</div>
+                        <div className="text-3xl font-bold text-purple-900 mt-1">
+                            {quizzes.reduce((sum, q) => sum + (q.attempts || 0), 0)}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Filter by Teacher */}
+                <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Filter by Teacher
+                    </label>
+                    <select
+                        value={filterTeacher}
+                        onChange={(e) => setFilterTeacher(e.target.value)}
+                        className="w-full md:w-64 px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                    >
+                        <option value="all">All Teachers</option>
+                        {teachers.map(teacher => (
+                            <option key={teacher.id} value={teacher.id}>
+                                {teacher.first_name} {teacher.last_name} ({teacher.email})
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-500">Loading data...</p>
+                    </div>
+                ) : (
+                    <div>
+                        {/* Teacher Activity Table */}
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">Teacher Activity Summary</h3>
+                        <div className="overflow-x-auto mb-8">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Teacher</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Quizzes Created</th>
+                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Total Attempts</th>
+                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {quizzesByTeacher.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                                                No teachers found
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        quizzesByTeacher.map(({ teacher, totalQuizzes, totalAttempts }) => (
+                                            <tr key={teacher.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="font-semibold text-gray-900">{teacher.first_name} {teacher.last_name}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                                    {teacher.email}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                                                        {totalQuizzes}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+                                                        {totalAttempts}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                                                        totalQuizzes > 0 
+                                                            ? 'bg-green-100 text-green-800' 
+                                                            : 'bg-gray-100 text-gray-600'
+                                                    }`}>
+                                                        {totalQuizzes > 0 ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Detailed Quiz List */}
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">
+                            Quiz Details {filterTeacher !== 'all' && `(${teachers.find(t => t.id === parseInt(filterTeacher))?.name})`}
+                        </h3>
+                        {filteredQuizzes.length === 0 ? (
+                            <div className="text-center py-12 bg-gray-50 rounded-xl">
+                                <FileText size={64} className="mx-auto mb-4 text-gray-300" />
+                                <p className="text-gray-500">No quizzes found</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {filteredQuizzes.map((quiz) => {
+                                    const creator = users.find(u => u.id === quiz.creator_id);
+                                    return (
+                                        <div key={quiz.id} className="border-2 border-gray-200 rounded-xl p-6 hover:border-blue-300 transition">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <h3 className="text-xl font-bold text-gray-900">{quiz.title}</h3>
+                                                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                                                            {quiz.is_active ? 'Active' : 'Inactive'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-gray-600 mb-2">{quiz.description}</p>
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <span className="text-sm text-gray-500">Created by:</span>
+                                                        <span className="text-sm font-semibold text-gray-700">
+                                                            {creator ? `${creator.first_name} ${creator.last_name}` : 'Unknown'} ({creator?.email || 'N/A'})
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                                                        <span className="flex items-center">
+                                                            <FileText size={16} className="mr-1" />
+                                                            {quiz.questions?.length || quiz.total_questions || 0} Questions
+                                                        </span>
+                                                        <span className="flex items-center">
+                                                            <Clock size={16} className="mr-1" />
+                                                            {quiz.duration_minutes || 30} mins
+                                                        </span>
+                                                        <span className="flex items-center">
+                                                            <Users size={16} className="mr-1" />
+                                                            {quiz.attempts || 0} Attempts
+                                                        </span>
+                                                        {quiz.department && (
+                                                            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold">
+                                                                {quiz.department}
+                                                            </span>
+                                                        )}
+                                                        {quiz.year && (
+                                                            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-semibold">
+                                                                Year {quiz.year}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Settings Component
+const SettingsComponent = () => {
+    const { success, error } = useToast();
+    const [activeSection, setActiveSection] = useState('departments');
+    
+    // Load from localStorage or use defaults
+    const [departments, setDepartments] = useState(() => {
+        const saved = localStorage.getItem('quiz_departments');
+        return saved ? JSON.parse(saved) : [
+            'Computer Science Engg.',
+            'Mechanical Engineering',
+            'Electrical Engineering',
+            'Civil Engineering',
+            'Electronics & Communication'
+        ];
+    });
+    
+    const [newDepartment, setNewDepartment] = useState('');
+    
+    const [gradingScale, setGradingScale] = useState(() => {
+        const saved = localStorage.getItem('quiz_grading_scale');
+        return saved ? JSON.parse(saved) : [
+            { grade: 'A+', minPercentage: 90, maxPercentage: 100 },
+            { grade: 'A', minPercentage: 80, maxPercentage: 89 },
+            { grade: 'B+', minPercentage: 70, maxPercentage: 79 },
+            { grade: 'B', minPercentage: 60, maxPercentage: 69 },
+            { grade: 'C', minPercentage: 50, maxPercentage: 59 },
+            { grade: 'D', minPercentage: 40, maxPercentage: 49 },
+            { grade: 'F', minPercentage: 0, maxPercentage: 39 }
+        ];
+    });
+    
+    const [platformSettings, setPlatformSettings] = useState(() => {
+        const saved = localStorage.getItem('quiz_platform_settings');
+        return saved ? JSON.parse(saved) : {
+            defaultQuizDuration: 30,
+            defaultGracePeriod: 5,
+            defaultMarksPerQuestion: 1,
+            defaultNegativeMarking: 0,
+            maxQuestionsPerQuiz: 100,
+            minQuestionsPerQuiz: 1,
+            allowStudentRetake: false,
+            showResultsImmediately: true
+        };
+    });
+
+    const handleAddDepartment = () => {
+        if (!newDepartment.trim()) {
+            error('Please enter a department name');
+            return;
+        }
+        if (departments.includes(newDepartment.trim())) {
+            error('Department already exists');
+            return;
+        }
+        const updated = [...departments, newDepartment.trim()];
+        setDepartments(updated);
+        localStorage.setItem('quiz_departments', JSON.stringify(updated));
+        setNewDepartment('');
+        success('Department added successfully');
+    };
+
+    const handleRemoveDepartment = (dept) => {
+        const updated = departments.filter(d => d !== dept);
+        setDepartments(updated);
+        localStorage.setItem('quiz_departments', JSON.stringify(updated));
+        success('Department removed successfully');
+    };
+
+    const handleSaveGradingScale = () => {
+        // Validate grading scale
+        const sorted = [...gradingScale].sort((a, b) => b.minPercentage - a.minPercentage);
+        let valid = true;
+        
+        for (let i = 0; i < sorted.length; i++) {
+            if (sorted[i].minPercentage > sorted[i].maxPercentage) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (!valid) {
+            error('Invalid grading scale: Min percentage cannot be greater than max percentage');
+            return;
+        }
+
+        localStorage.setItem('quiz_grading_scale', JSON.stringify(gradingScale));
+        success('Grading scale saved successfully');
+    };
+
+    const handleSavePlatformSettings = () => {
+        if (platformSettings.defaultQuizDuration < 1) {
+            error('Quiz duration must be at least 1 minute');
+            return;
+        }
+        if (platformSettings.maxQuestionsPerQuiz < platformSettings.minQuestionsPerQuiz) {
+            error('Max questions cannot be less than min questions');
+            return;
+        }
+        localStorage.setItem('quiz_platform_settings', JSON.stringify(platformSettings));
+        success('Platform settings saved successfully');
+    };
+
+    // Helper function to get grade from percentage
+    const getGradeFromPercentage = (percentage) => {
+        for (let scale of gradingScale) {
+            if (percentage >= scale.minPercentage && percentage <= scale.maxPercentage) {
+                return scale.grade;
+            }
+        }
+        return 'N/A';
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* Info Banner */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl shadow-lg p-6">
+                <div className="flex items-start gap-4">
+                    <Settings size={32} className="flex-shrink-0 mt-1" />
+                    <div>
+                        <h3 className="text-xl font-bold mb-2">Settings are Active!</h3>
+                        <p className="text-blue-100 mb-2">
+                            Your configurations are saved locally and will be applied across the platform:
+                        </p>
+                        <ul className="space-y-1 text-sm text-blue-50">
+                            <li>✓ <strong>Departments:</strong> Available in user creation and quiz assignment filters</li>
+                            <li>✓ <strong>Grading Scale:</strong> Used to calculate letter grades from quiz scores</li>
+                            <li>✓ <strong>Platform Settings:</strong> Default values for new quizzes and system behavior</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">System Settings</h2>
+                <p className="text-gray-600 mb-6">Configure platform settings and preferences</p>
+
+                {/* Section Tabs */}
+                <div className="flex space-x-2 mb-6 border-b border-gray-200">
+                    <button
+                        onClick={() => setActiveSection('departments')}
+                        className={`px-6 py-3 font-semibold transition ${
+                            activeSection === 'departments'
+                                ? 'border-b-2 border-blue-600 text-blue-600'
+                                : 'text-gray-600 hover:text-blue-600'
+                        }`}
+                    >
+                        Departments
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+                            {departments.length}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveSection('grading')}
+                        className={`px-6 py-3 font-semibold transition ${
+                            activeSection === 'grading'
+                                ? 'border-b-2 border-blue-600 text-blue-600'
+                                : 'text-gray-600 hover:text-blue-600'
+                        }`}
+                    >
+                        Grading Scale
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">
+                            {gradingScale.length} grades
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveSection('platform')}
+                        className={`px-6 py-3 font-semibold transition ${
+                            activeSection === 'platform'
+                                ? 'border-b-2 border-blue-600 text-blue-600'
+                                : 'text-gray-600 hover:text-blue-600'
+                        }`}
+                    >
+                        Platform Settings
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full">
+                            8 options
+                        </span>
+                    </button>
+                </div>
+
+                {/* Department Management */}
+                {activeSection === 'departments' && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-lg flex-1">
+                                <p className="text-sm text-blue-900">
+                                    <strong>Department Management:</strong> Add or remove departments for student classification.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    const defaults = [
+                                        'Computer Science Engg.',
+                                        'Mechanical Engineering',
+                                        'Electrical Engineering',
+                                        'Civil Engineering',
+                                        'Electronics & Communication'
+                                    ];
+                                    setDepartments(defaults);
+                                    localStorage.setItem('quiz_departments', JSON.stringify(defaults));
+                                    success('Reset to default departments');
+                                }}
+                                className="ml-4 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-semibold"
+                            >
+                                Reset to Defaults
+                            </button>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <input
+                                type="text"
+                                value={newDepartment}
+                                onChange={(e) => setNewDepartment(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleAddDepartment()}
+                                placeholder="Enter department name"
+                                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                            />
+                            <button
+                                onClick={handleAddDepartment}
+                                className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition flex items-center"
+                            >
+                                <Plus size={20} className="mr-2" />
+                                Add
+                            </button>
+                        </div>
+
+                        <div className="space-y-2">
+                            <h3 className="font-semibold text-gray-700">Current Departments:</h3>
+                            {departments.length === 0 ? (
+                                <p className="text-gray-500 text-center py-8">No departments added yet</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {departments.map((dept, index) => (
+                                        <div
+                                            key={index}
+                                            className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition"
+                                        >
+                                            <span className="font-medium text-gray-800">{dept}</span>
+                                            <button
+                                                onClick={() => handleRemoveDepartment(dept)}
+                                                className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition"
+                                            >
+                                                <X size={20} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Grading Scale */}
+                {activeSection === 'grading' && (
+                    <div className="space-y-4">
+                        <div className="bg-green-50 border-l-4 border-green-600 p-4 rounded-lg">
+                            <p className="text-sm text-green-900">
+                                <strong>Grading Scale:</strong> Define grade boundaries based on percentage scores.
+                            </p>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Grade</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Min %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Max %</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {gradingScale.map((scale, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4">
+                                                <input
+                                                    type="text"
+                                                    value={scale.grade}
+                                                    onChange={(e) => {
+                                                        const newScale = [...gradingScale];
+                                                        newScale[index].grade = e.target.value;
+                                                        setGradingScale(newScale);
+                                                    }}
+                                                    className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <input
+                                                    type="number"
+                                                    value={scale.minPercentage}
+                                                    onChange={(e) => {
+                                                        const newScale = [...gradingScale];
+                                                        newScale[index].minPercentage = parseInt(e.target.value) || 0;
+                                                        setGradingScale(newScale);
+                                                    }}
+                                                    className="w-24 px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                                                    min="0"
+                                                    max="100"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <input
+                                                    type="number"
+                                                    value={scale.maxPercentage}
+                                                    onChange={(e) => {
+                                                        const newScale = [...gradingScale];
+                                                        newScale[index].maxPercentage = parseInt(e.target.value) || 0;
+                                                        setGradingScale(newScale);
+                                                    }}
+                                                    className="w-24 px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                                                    min="0"
+                                                    max="100"
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button
+                            onClick={handleSaveGradingScale}
+                            className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition flex items-center"
+                        >
+                            <Save size={20} className="mr-2" />
+                            Save Grading Scale
+                        </button>
+                    </div>
+                )}
+
+                {/* Platform Settings */}
+                {activeSection === 'platform' && (
+                    <div className="space-y-6">
+                        <div className="bg-purple-50 border-l-4 border-purple-600 p-4 rounded-lg">
+                            <p className="text-sm text-purple-900">
+                                <strong>Platform Settings:</strong> Configure default quiz parameters and behavior.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Quiz Duration */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Default Quiz Duration (minutes)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={platformSettings.defaultQuizDuration}
+                                    onChange={(e) => setPlatformSettings({
+                                        ...platformSettings,
+                                        defaultQuizDuration: parseInt(e.target.value) || 30
+                                    })}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                                    min="1"
+                                />
+                            </div>
+
+                            {/* Grace Period */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Default Grace Period (minutes)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={platformSettings.defaultGracePeriod}
+                                    onChange={(e) => setPlatformSettings({
+                                        ...platformSettings,
+                                        defaultGracePeriod: parseInt(e.target.value) || 5
+                                    })}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                                    min="0"
+                                />
+                            </div>
+
+                            {/* Marks Per Question */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Default Marks Per Question
+                                </label>
+                                <input
+                                    type="number"
+                                    value={platformSettings.defaultMarksPerQuestion}
+                                    onChange={(e) => setPlatformSettings({
+                                        ...platformSettings,
+                                        defaultMarksPerQuestion: parseFloat(e.target.value) || 1
+                                    })}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                                    min="0"
+                                    step="0.25"
+                                />
+                            </div>
+
+                            {/* Negative Marking */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Default Negative Marking
+                                </label>
+                                <input
+                                    type="number"
+                                    value={platformSettings.defaultNegativeMarking}
+                                    onChange={(e) => setPlatformSettings({
+                                        ...platformSettings,
+                                        defaultNegativeMarking: parseFloat(e.target.value) || 0
+                                    })}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                                    min="0"
+                                    step="0.25"
+                                />
+                            </div>
+
+                            {/* Max Questions */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Max Questions Per Quiz
+                                </label>
+                                <input
+                                    type="number"
+                                    value={platformSettings.maxQuestionsPerQuiz}
+                                    onChange={(e) => setPlatformSettings({
+                                        ...platformSettings,
+                                        maxQuestionsPerQuiz: parseInt(e.target.value) || 100
+                                    })}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                                    min="1"
+                                />
+                            </div>
+
+                            {/* Min Questions */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Min Questions Per Quiz
+                                </label>
+                                <input
+                                    type="number"
+                                    value={platformSettings.minQuestionsPerQuiz}
+                                    onChange={(e) => setPlatformSettings({
+                                        ...platformSettings,
+                                        minQuestionsPerQuiz: parseInt(e.target.value) || 1
+                                    })}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                                    min="1"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Toggles */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                <div>
+                                    <h4 className="font-semibold text-gray-800">Allow Student Retake</h4>
+                                    <p className="text-sm text-gray-600">Students can retake quizzes multiple times</p>
+                                </div>
+                                <button
+                                    onClick={() => setPlatformSettings({
+                                        ...platformSettings,
+                                        allowStudentRetake: !platformSettings.allowStudentRetake
+                                    })}
+                                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition ${
+                                        platformSettings.allowStudentRetake ? 'bg-green-600' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                                            platformSettings.allowStudentRetake ? 'translate-x-7' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                <div>
+                                    <h4 className="font-semibold text-gray-800">Show Results Immediately</h4>
+                                    <p className="text-sm text-gray-600">Display results right after quiz submission</p>
+                                </div>
+                                <button
+                                    onClick={() => setPlatformSettings({
+                                        ...platformSettings,
+                                        showResultsImmediately: !platformSettings.showResultsImmediately
+                                    })}
+                                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition ${
+                                        platformSettings.showResultsImmediately ? 'bg-green-600' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                                            platformSettings.showResultsImmediately ? 'translate-x-7' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleSavePlatformSettings}
+                            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition flex items-center"
+                        >
+                            <Save size={20} className="mr-2" />
+                            Save Platform Settings
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Quick Summary Card */}
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Current Configuration Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-xl p-4 shadow-sm">
+                        <div className="text-sm text-gray-600 mb-1">Departments</div>
+                        <div className="text-2xl font-bold text-blue-600">{departments.length}</div>
+                        <div className="text-xs text-gray-500 mt-1">Available for classification</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 shadow-sm">
+                        <div className="text-sm text-gray-600 mb-1">Grade Levels</div>
+                        <div className="text-2xl font-bold text-green-600">{gradingScale.length}</div>
+                        <div className="text-xs text-gray-500 mt-1">From {gradingScale[gradingScale.length-1]?.grade} to {gradingScale[0]?.grade}</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 shadow-sm">
+                        <div className="text-sm text-gray-600 mb-1">Default Duration</div>
+                        <div className="text-2xl font-bold text-purple-600">{platformSettings.defaultQuizDuration} min</div>
+                        <div className="text-xs text-gray-500 mt-1">For new quizzes</div>
+                    </div>
+                </div>
+                <div className="mt-4 p-3 bg-green-50 border-l-4 border-green-500 rounded">
+                    <p className="text-sm text-green-900">
+                        <CheckCircle size={16} className="inline mr-2" />
+                        <strong>All settings saved locally.</strong> Use the helper functions in <code className="bg-green-100 px-1 rounded">utils/settingsHelper.js</code> to access these configurations throughout the app.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Student Results View - Shows all quiz attempts with student performance
+const StudentResultsView = () => {
+    const { error, success } = useToast();
+    const [attempts, setAttempts] = useState([]);
+    const [students, setStudents] = useState([]);
+    const [quizzes, setQuizzes] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [filterQuiz, setFilterQuiz] = useState('all');
+    const [filterStudent, setFilterStudent] = useState('all');
+
+    useEffect(() => {
+        fetchAllData();
+    }, []);
+
+    const fetchAllData = async () => {
+        setIsLoading(true);
+        try {
+            console.log('📊 Fetching student results data...');
+            
+            // Fetch each resource individually to identify which one fails
+            let usersData, quizzesData, attemptsData;
+            
+            try {
+                console.log('Fetching users...');
+                usersData = await userAPI.getAllUsers();
+                console.log('✅ Users fetched:', usersData?.length);
+            } catch (err) {
+                console.error('❌ Failed to fetch users:', err);
+                throw new Error(`Users API failed: ${err.message}`);
+            }
+            
+            try {
+                console.log('Fetching quizzes...');
+                quizzesData = await quizAPI.getAllQuizzes();
+                console.log('✅ Quizzes fetched:', quizzesData?.length);
+            } catch (err) {
+                console.error('❌ Failed to fetch quizzes:', err);
+                throw new Error(`Quizzes API failed: ${err.message}`);
+            }
+            
+            try {
+                console.log('📊 Fetching attempts...');
+                console.log('API URL:', `${import.meta.env.VITE_API_BASE_URL}/api/v1/attempts/all-attempts`);
+                attemptsData = await attemptAPI.getAllAttempts({});
+                console.log('✅ Attempts fetched successfully');
+                console.log('Attempts count:', attemptsData?.length);
+                console.log('Attempts data:', attemptsData);
+            } catch (err) {
+                console.error('❌ ATTEMPTS API ERROR - START ❌');
+                console.error('Raw error object:', err);
+                console.error('Error constructor:', err?.constructor?.name);
+                console.error('Error toString:', String(err));
+                
+                // For APIError objects from fetchAPI
+                if (err?.status) {
+                    console.error(`HTTP ${err.status}:`, err.data?.detail || err.message);
+                    
+                    if (err.status === 403) {
+                        attemptsData = [];
+                        console.warn('⚠️ Permission denied - showing empty results');
+                    } else if (err.status === 404) {
+                        attemptsData = [];
+                        console.warn('⚠️ Endpoint not found - showing empty results');  
+                    } else {
+                        attemptsData = [];
+                        console.warn(`⚠️ API error ${err.status} - showing empty results`);
+                    }
+                } else {
+                    // Network or other error
+                    console.error('Network or unknown error');
+                    attemptsData = [];
+                }
+                
+                console.error('❌ ATTEMPTS API ERROR - END ❌');
+                // Don't throw - just show empty results
+            }
+
+            const studentsList = usersData.filter(u => u.role === 'student');
+            setStudents(studentsList);
+            setQuizzes(quizzesData || []);
+            setAttempts(attemptsData || []);
+            
+            console.log('✅ All data loaded successfully');
+        } catch (err) {
+            console.error('❌ Error loading student results:', err);
+            // Better error message formatting
+            let errorMessage = 'Failed to load student results';
+            if (typeof err === 'string') {
+                errorMessage = err;
+            } else if (err?.message) {
+                errorMessage = err.message;
+            } else if (err?.data?.detail) {
+                errorMessage = err.data.detail;
+            } else {
+                errorMessage = JSON.stringify(err, null, 2);
+            }
+            error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Filter attempts
+    const filteredAttempts = attempts.filter(attempt => {
+        if (filterQuiz !== 'all' && attempt.quiz_id !== parseInt(filterQuiz)) return false;
+        if (filterStudent !== 'all' && attempt.student_id !== parseInt(filterStudent)) return false;
+        return true;
+    });
+
+    // Get student name by ID
+    const getStudentName = (studentId) => {
+        const student = students.find(s => s.id === studentId);
+        return student ? `${student.first_name} ${student.last_name}` : 'Unknown';
+    };
+
+    // Export to CSV
+    const exportToCSV = () => {
+        if (filteredAttempts.length === 0) {
+            error('No data to export');
+            return;
+        }
+
+        const headers = ['Student Name', 'Email', 'Quiz', 'Score', 'Total Marks', 'Percentage', 'Correct Answers', 'Total Questions', 'Time Taken', 'Submitted At', 'Status'];
+        const csvData = filteredAttempts.map(attempt => [
+            attempt.student_name || getStudentName(attempt.student_id),
+            attempt.student_email || '',
+            attempt.quiz_title || `Quiz ${attempt.quiz_id}`,
+            attempt.score?.toFixed(1) || 0,
+            attempt.quiz_total_marks || attempt.total_marks,
+            (attempt.percentage || 0).toFixed(1) + '%',
+            attempt.correct_answers || 0,
+            attempt.total_questions || 0,
+            attempt.time_taken || 'N/A',
+            attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'Not submitted',
+            (attempt.percentage || 0) >= 60 ? 'Passed' : 'Failed'
+        ]);
+
+        const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `student-results-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        success('Report exported successfully');
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <div className="mb-6 flex justify-between items-start">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Student Quiz Results</h2>
+                    <p className="text-gray-600">View all student quiz attempts and performance</p>
+                </div>
+                <button
+                    onClick={exportToCSV}
+                    disabled={filteredAttempts.length === 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                    <Download size={20} />
+                    Export Report
+                </button>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-4 mb-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Quiz</label>
+                    <select
+                        value={filterQuiz}
+                        onChange={(e) => setFilterQuiz(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="all">All Quizzes</option>
+                        {quizzes.map(quiz => (
+                            <option key={quiz.id} value={quiz.id}>{quiz.title}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Student</label>
+                    <select
+                        value={filterStudent}
+                        onChange={(e) => setFilterStudent(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="all">All Students</option>
+                        {students.map(student => (
+                            <option key={student.id} value={student.id}>
+                                {student.first_name} {student.last_name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-600">Total Attempts</div>
+                    <div className="text-2xl font-bold text-blue-600">{filteredAttempts.length}</div>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-600">Average Score</div>
+                    <div className="text-2xl font-bold text-green-600">
+                        {filteredAttempts.length > 0
+                            ? (filteredAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / filteredAttempts.length).toFixed(1)
+                            : '0'}%
+                    </div>
+                </div>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-600">Pass Rate</div>
+                    <div className="text-2xl font-bold text-yellow-600">
+                        {filteredAttempts.length > 0
+                            ? ((filteredAttempts.filter(a => (a.percentage || 0) >= 60).length / filteredAttempts.length) * 100).toFixed(1)
+                            : '0'}%
+                    </div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-600">Students Participated</div>
+                    <div className="text-2xl font-bold text-purple-600">
+                        {new Set(filteredAttempts.map(a => a.student_id)).size}
+                    </div>
+                </div>
+            </div>
+
+            {/* Results Table */}
+            {isLoading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Loading results...</p>
+                </div>
+            ) : filteredAttempts.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-50 border-b-2 border-gray-200">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Student</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Quiz</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Score</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Percentage</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Correct/Total</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Time Taken</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Submitted</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {filteredAttempts.map((attempt) => {
+                                const percentage = attempt.percentage || 0;
+                                const passed = percentage >= 60;
+                                
+                                return (
+                                    <tr key={attempt.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="font-semibold text-gray-900">
+                                                {getStudentName(attempt.student_id)}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                            {attempt.quiz_title || 'Quiz ' + attempt.quiz_id}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="font-bold text-gray-900">
+                                                {attempt.score?.toFixed(1) || 0} / {attempt.quiz_total_marks || attempt.total_marks}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`font-bold ${passed ? 'text-green-600' : 'text-red-600'}`}>
+                                                {percentage.toFixed(1)}%
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                            {attempt.correct_answers || 0} / {attempt.total_questions || 0}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                            {attempt.time_taken || 'N/A'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                            {attempt.submitted_at 
+                                                ? new Date(attempt.submitted_at).toLocaleString()
+                                                : 'Not submitted'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {passed ? (
+                                                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
+                                                    <CheckCircle size={14} />
+                                                    Passed
+                                                </span>
+                                            ) : (
+                                                <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
+                                                    <XCircle size={14} />
+                                                    Failed
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="text-center py-12">
+                    <Trophy size={48} className="mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500">No quiz results found</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 /**
  * --- MAIN APPLICATION COMPONENT (Admin Dashboard) ---
  */
-export default function App() {
+export default function AdminDashboard() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
     const { success, error } = useToast();
@@ -1717,13 +3284,20 @@ export default function App() {
         setUserListRefresh(prev => prev + 1); // Trigger refresh
     };
 
-    // NOTE: Removed 'Activity Tracker' and replaced with dedicated 'Teachers' and 'Students' links.
-    const navItems = [
+    // Role-based navigation
+    const navItems = user?.role === 'teacher' ? [
+        { name: "Dashboard", icon: LayoutDashboard, title: "Dashboard" },
+        { name: "Quizzes", icon: FileText, title: "My Quizzes" },
+        { name: "Students", icon: Users, title: "My Students" },
+        { name: "Student Results", icon: Trophy, title: "Student Results" },
+        { name: "Settings", icon: Settings, title: "Settings" },
+    ] : [
         { name: "Dashboard", icon: LayoutDashboard, title: "Dashboard" },
         { name: "Users", icon: Users, title: "User Management", onClick: () => setUserViewMode('list') },
-        { name: "Teachers", icon: Users, title: "Teacher Activity Lookup" }, // NEW DEDICATED LINK
-        { name: "Students", icon: Users, title: "Student Activity Lookup" }, // NEW DEDICATED LINK
+        { name: "Teachers", icon: Users, title: "Teacher Activity Lookup" },
+        { name: "Students", icon: Users, title: "Student Activity Lookup" },
         { name: "Quizzes", icon: FileText, title: "Quiz Management" },
+        { name: "Student Results", icon: Trophy, title: "Student Results" },
         { name: "Detailed Reports", icon: BarChart3, title: "Detailed Reports" },
         { name: "Settings", icon: Settings, title: "Settings" },
     ];
@@ -1745,7 +3319,7 @@ export default function App() {
     const renderContent = () => {
         switch (activeTab) {
             case 'Dashboard': { // Added braces to fix no-case-declarations
-                const hasActivity = mockActivity.length > 0;
+                const hasActivity = false; // No activity tracking for now
                 return (
                     <div className="space-y-8">
                         {/* 4 Block Metrics (Colors reverted) */}
@@ -1777,15 +3351,9 @@ export default function App() {
                                 Recent System Activity
                             </h2>
                             <div className="space-y-2">
-                                {hasActivity ? (
-                                    mockActivity.map((activity) => (
-                                        <ActivityItem key={activity.id} {...activity} />
-                                    ))
-                                ) : (
-                                    <div className="text-center py-10 text-gray-500 text-lg">
-                                        No activity recorded yet. Start by provisioning users and creating quizzes!
-                                    </div>
-                                )}
+                                <div className="text-center py-10 text-gray-500 text-lg">
+                                    No activity recorded yet. Start by provisioning users and creating quizzes!
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1796,6 +3364,7 @@ export default function App() {
                     <UserCreationForm 
                         onCancel={() => setUserViewMode('list')} 
                         onUserCreated={handleUserCreated}
+                        currentUserRole={user?.role}
                     />
                 ) : (
                     <UserList 
@@ -1807,14 +3376,21 @@ export default function App() {
             case 'Teachers':
                 return <UserActivityTable userType="Teachers" />;
             case 'Students':
-                return <UserActivityTable userType="Students" />;
+                return user?.role === 'teacher' 
+                    ? <TeacherStudentsView />
+                    : <UserActivityTable userType="Students" />;
             // Removed old 'Activity Tracker' case
             case 'Quizzes':
-                return <Placeholder content="Quiz Management: View and moderate all active and pending quiz submissions." />;
+                // Teachers can create/manage quizzes, Admins can only monitor
+                return user?.role === 'teacher' 
+                    ? <TeacherQuizManagement /> 
+                    : <AdminQuizMonitoring />;
+            case 'Student Results':
+                return <StudentResultsView />;
             case 'Detailed Reports':
                 return <DetailedReportsTool />;
             case 'Settings':
-                return <Placeholder content="System Configuration: Manage grading scales, departmental listings, and platform settings." />;
+                return <SettingsComponent />;
             default:
                 return <Placeholder content="Page Not Found" />;
         }
@@ -1828,11 +3404,34 @@ export default function App() {
     );
 
     return (
-        <div className="min-h-screen flex bg-gray-50 font-inter">
+        <div className="min-h-screen flex flex-col lg:flex-row bg-gray-50 font-inter">
+            {/* Mobile Header */}
+            <div className="lg:hidden bg-white border-b shadow-md p-4 flex items-center justify-between sticky top-0 z-30">
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={() => setActiveTab('Dashboard')}
+                        className="text-xl font-bold text-blue-600"
+                    >
+                        MacQuiz
+                    </button>
+                    <span className="text-sm text-gray-500">
+                        {user?.role === 'teacher' ? 'Teacher' : 'Admin'}
+                    </span>
+                </div>
+                <button
+                    onClick={handleLogout}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                >
+                    <LogOut size={20} />
+                </button>
+            </div>
+
             {/* Sidebar Navigation */}
             <aside className="hidden lg:flex w-64 flex-col fixed inset-y-0 bg-white border-r shadow-lg z-20">
                 <div className="p-6 text-2xl font-extrabold text-blue-700 border-b">
-                    MacQuiz <span className="text-gray-400 font-light">Admin</span>
+                    MacQuiz <span className="text-gray-400 font-light">
+                        {user?.role === 'teacher' ? 'Teacher Portal' : 'Admin'}
+                    </span>
                 </div>
                 <nav className="flex-1 p-4 space-y-2">
                     {navItems.map((item) => {
@@ -1868,9 +3467,9 @@ export default function App() {
             </aside>
 
             {/* Main Content Area */}
-            <main className="flex-1 lg:ml-64 p-4 md:p-8">
+            <main className="flex-1 lg:ml-64 p-3 sm:p-4 md:p-6 lg:p-8 pb-20 lg:pb-8 w-full overflow-x-hidden">
                 {/* Header/Title with Profile Avatar */}
-                <header className="mb-8 flex justify-between items-start">
+                <header className="mb-4 sm:mb-6 md:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-4xl font-bold text-gray-900">
                             {getCurrentTitle()}
@@ -1880,19 +3479,42 @@ export default function App() {
                         </p>
                     </div>
 
-                    {/* Profile Panel (Top Right) */}
-                    <div className="flex flex-col items-end space-y-1">
+                    {/* Profile Panel (Top Right) - Hidden on mobile, shown on desktop */}
+                    <div className="hidden sm:flex flex-col items-end space-y-1">
                         {/* Reverted profile avatar BG to blue */}
-                        <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-md cursor-pointer hover:ring-4 ring-blue-300 transition duration-150">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md cursor-pointer hover:ring-4 ring-blue-300 transition duration-150">
                             AD
                         </div>
-                        <p className="text-sm font-semibold text-gray-800">Administrator</p>
+                        <p className="text-xs sm:text-sm font-semibold text-gray-800">Administrator</p>
                         <p className="text-xs text-gray-500">Admin ID: 001</p>
                     </div>
                 </header>
 
                 {renderContent()}
             </main>
+
+            {/* Mobile Bottom Navigation */}
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-30">
+                <div className="flex justify-around items-center py-2">
+                    {navItems.slice(0, 4).map((item) => (
+                        <button
+                            key={item.name}
+                            onClick={() => {
+                                setActiveTab(item.name);
+                                if (item.onClick) item.onClick();
+                            }}
+                            className={`flex flex-col items-center p-2 rounded-lg transition ${
+                                activeTab === item.name
+                                    ? 'text-blue-600'
+                                    : 'text-gray-600'
+                            }`}
+                        >
+                            <item.icon size={20} />
+                            <span className="text-xs mt-1">{item.title.split(' ')[0]}</span>
+                        </button>
+                    ))}
+                </div>
+            </nav>
         </div>
     );
 }

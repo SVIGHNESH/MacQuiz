@@ -161,6 +161,11 @@ class QuizCreate(BaseModel):
     duration_minutes: Optional[int] = None
     grace_period_minutes: int = 5
     
+    # Live session
+    is_live_session: bool = False
+    live_start_time: Optional[datetime] = None
+    live_end_time: Optional[datetime] = None
+    
     # Marking scheme
     marks_per_correct: float = 1.0
     negative_marking: float = 0.0
@@ -176,9 +181,13 @@ class QuizUpdate(BaseModel):
     scheduled_at: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     grace_period_minutes: Optional[int] = None
+    is_live_session: Optional[bool] = None
+    live_start_time: Optional[datetime] = None
+    live_end_time: Optional[datetime] = None
     marks_per_correct: Optional[float] = None
     negative_marking: Optional[float] = None
     is_active: Optional[bool] = None
+    assigned_student_ids: Optional[List[int]] = None  # List of student IDs to assign
 
 class QuizResponse(BaseModel):
     id: int
@@ -191,12 +200,17 @@ class QuizResponse(BaseModel):
     scheduled_at: Optional[datetime]
     duration_minutes: Optional[int]
     grace_period_minutes: int
+    is_live_session: bool
+    live_start_time: Optional[datetime]
+    live_end_time: Optional[datetime]
     total_marks: float
     marks_per_correct: float
     negative_marking: float
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    total_questions: Optional[int] = None
+    attempts: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -247,6 +261,12 @@ class QuizAttemptResponse(BaseModel):
     time_taken_minutes: Optional[float]
     is_completed: bool
     is_graded: bool
+    # Additional fields for quiz result display
+    quiz_title: Optional[str] = None
+    correct_answers: Optional[int] = None
+    total_questions: Optional[int] = None
+    quiz_total_marks: Optional[float] = None
+    time_taken: Optional[str] = None
     
     class Config:
         from_attributes = True

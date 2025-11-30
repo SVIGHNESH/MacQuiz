@@ -11,12 +11,19 @@ from app.core.deps import get_current_active_user, require_role
 
 router = APIRouter()
 
-@router.post("/", response_model=UserResponse, dependencies=[Depends(require_role(["admin"]))])
+@router.post("/", response_model=UserResponse, dependencies=[Depends(require_role(["admin", "teacher"]))])
 async def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Teachers can only create students
+    if current_user.role == "teacher" and user_data.role != "student":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teachers can only create student accounts"
+        )
+    
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -54,14 +61,14 @@ async def create_user(
     
     return db_user
 
-@router.post("/bulk-upload", dependencies=[Depends(require_role(["admin"]))])
+@router.post("/bulk-upload", dependencies=[Depends(require_role(["admin", "teacher"]))])
 async def bulk_upload_users(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Bulk upload users from CSV file.
+    Bulk upload users from CSV file. Teachers can only upload students.
     Expected CSV format: role,first_name,last_name,email,password,phone_number,student_id,department,class_year
     """
     if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
@@ -178,7 +185,7 @@ async def bulk_upload_users(
             detail=f"Failed to process file: {str(e)}"
         )
 
-@router.get("/", response_model=List[UserResponse], dependencies=[Depends(require_role(["admin"]))])
+@router.get("/", response_model=List[UserResponse], dependencies=[Depends(require_role(["admin", "teacher"]))])
 async def get_all_users(
     skip: int = 0,
     limit: int = 100,
@@ -188,7 +195,10 @@ async def get_all_users(
 ):
     query = db.query(User)
     
-    if role:
+    # Teachers can only see students
+    if current_user.role == "teacher":
+        query = query.filter(User.role == "student")
+    elif role:
         query = query.filter(User.role == role.lower())
     
     users = query.offset(skip).limit(limit).all()

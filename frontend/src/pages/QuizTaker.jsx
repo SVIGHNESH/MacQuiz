@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -18,7 +18,8 @@ const QuizTaker = () => {
     const [attempt, setAttempt] = useState(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState({});
-    const [timeRemaining, setTimeRemaining] = useState(0);
+    const [timeRemaining, setTimeRemaining] = useState(null);
+    const [calculatedDuration, setCalculatedDuration] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
@@ -31,17 +32,87 @@ const QuizTaker = () => {
                 const quizData = await quizAPI.getQuiz(quizId);
                 setQuiz(quizData);
 
-                // Start attempt
+                // Teachers and admins can preview/take quizzes anytime (skip eligibility check)
+                const isTeacherOrAdmin = user?.role === 'teacher' || user?.role === 'admin';
+                
+                // Check eligibility FIRST before creating attempt (skip for teachers/admins)
+                let duration = quizData.duration_minutes;
+                if (!isTeacherOrAdmin) {
+                    try {
+                        const eligibilityData = await quizAPI.checkEligibility(quizId);
+                        
+                        if (!eligibilityData.eligible) {
+                            error(eligibilityData.reason || 'You cannot take this quiz at this time.');
+                            setTimeout(() => navigate('/dashboard'), 2000);
+                            return;
+                        }
+                        
+                        if (eligibilityData.duration_minutes) {
+                            duration = eligibilityData.duration_minutes;
+                        }
+                    } catch (err) {
+                        console.error('Eligibility check failed:', err);
+                        error('Failed to verify quiz eligibility. Please try again.');
+                        setTimeout(() => navigate('/dashboard'), 2000);
+                        return;
+                    }
+                }
+                
+                // Store calculated duration in state for timer sync
+                setCalculatedDuration(duration);
+                
+                // Initialize timer immediately with calculated duration
+                const initialTimeSeconds = duration * 60;
+                setTimeRemaining(initialTimeSeconds);
+                
+                // Start attempt (will return existing if in progress)
                 const attemptData = await attemptAPI.startAttempt(quizId);
+                
+                // If attempt is already completed, redirect to results
+                if (attemptData.is_completed) {
+                    navigate(`/quiz-result/${attemptData.id}`);
+                    return;
+                }
+                
                 setAttempt(attemptData);
                 
-                // Set timer
-                setTimeRemaining(quizData.duration_minutes * 60);
+                // Restore saved answers if this is a reconnection
+                let savedAnswersData = null;
+                try {
+                    savedAnswersData = await attemptAPI.getSavedAnswers(attemptData.id);
+                    if (savedAnswersData.answers && savedAnswersData.answers.length > 0) {
+                        const restoredAnswers = {};
+                        savedAnswersData.answers.forEach(ans => {
+                            restoredAnswers[ans.question_id] = ans.answer_text;
+                        });
+                        setAnswers(restoredAnswers);
+                    }
+                } catch (err) {
+                    // No saved answers to restore
+                }
                 
-                success('Quiz started! Good luck!');
+                // Check if time has already expired
+                if (initialTimeSeconds <= 0) {
+                    if (attemptData.is_completed) {
+                        navigate(`/quiz-result/${attemptData.id}`);
+                    } else {
+                        error(quizData.is_live_session ? 'This quiz session has ended.' : 'Quiz time has expired.');
+                        setTimeout(() => navigate('/dashboard'), 1500);
+                    }
+                    return;
+                }
+                
+                const isReconnection = savedAnswersData?.answers?.length > 0;
+                const previewMessage = isTeacherOrAdmin ? 'Quiz preview started' : 
+                    (isReconnection ? 'Reconnected to quiz! Your progress has been restored.' : 
+                        (quizData.is_live_session ? 'Joined live quiz session!' : 'Quiz started! Good luck!'));
+                success(previewMessage);
             } catch (err) {
-                error(err.data?.detail || 'Failed to start quiz');
-                navigate(-1);
+                const errorMessage = err.data?.detail || err.message || 'Failed to start quiz';
+                error(errorMessage);
+                console.error('Quiz start error:', err);
+                // Only navigate back for quiz-specific errors, not auth errors
+                setTimeout(() => navigate('/dashboard'), 2000);
             } finally {
                 setIsLoading(false);
             }
@@ -50,17 +121,54 @@ const QuizTaker = () => {
         initQuiz();
     }, [quizId]);
 
+    // Sync timer for live sessions (handles reconnections)
+    useEffect(() => {
+        if (!quiz?.is_live_session || !attempt?.id || !attempt?.started_at || !calculatedDuration) {
+            return;
+        }
+
+        // Sync time every 5 seconds to handle reconnections accurately
+        const syncInterval = setInterval(() => {
+            const now = new Date();
+            const startedAt = new Date(attempt.started_at);
+            
+            // Calculate elapsed time from when student actually started
+            const elapsedMs = now - startedAt;
+            const elapsedMinutes = elapsedMs / (1000 * 60);
+            
+            // Get the allocated duration for this student (accounts for late join penalty)
+            const allocatedSeconds = calculatedDuration * 60;
+            
+            // Calculate remaining time
+            const remainingSeconds = Math.max(0, Math.floor(allocatedSeconds - (elapsedMs / 1000)));
+            
+            // Update time remaining based on actual elapsed time since student started
+            setTimeRemaining(remainingSeconds);
+            
+            if (remainingSeconds === 0) {
+                clearInterval(syncInterval);
+                handleSubmit();
+            }
+        }, 5000); // Sync every 5 seconds
+
+        return () => clearInterval(syncInterval);
+    }, [quiz, attempt, calculatedDuration]);
+
     // Timer countdown
     useEffect(() => {
-        if (timeRemaining <= 0) {
-            handleSubmitQuiz(true);
+        // Don't start timer if quiz hasn't started yet
+        if (!quiz || !attempt || isLoading) {
+            return;
+        }
+
+        // If time is already 0 or not set, don't start timer
+        if (timeRemaining === null || timeRemaining <= 0) {
             return;
         }
 
         const timer = setInterval(() => {
             setTimeRemaining((prev) => {
                 if (prev <= 1) {
-                    clearInterval(timer);
                     return 0;
                 }
                 return prev - 1;
@@ -68,19 +176,48 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [timeRemaining]);
+    }, [quiz, attempt, isLoading]);
+
+    // Auto-submit when timer reaches 0
+    const hasAutoSubmitted = useRef(false);
+    useEffect(() => {
+        if (timeRemaining === 0 && timeRemaining !== null && attempt?.id && quiz && !isSubmitting && !hasAutoSubmitted.current) {
+            hasAutoSubmitted.current = true;
+            handleSubmitQuiz(true);
+        }
+    }, [timeRemaining, attempt, quiz, isSubmitting]);
 
     const formatTime = (seconds) => {
+        if (seconds === null) return '--:--';
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleAnswerSelect = (questionId, answer) => {
+    const handleAnswerSelect = async (questionId, answer) => {
+        // Prevent answer changes when time has expired
+        if (timeRemaining !== null && timeRemaining <= 0) {
+            error('Time has expired! Please wait while we submit your quiz.');
+            return;
+        }
+        
         setAnswers({
             ...answers,
             [questionId]: answer
         });
+        
+        // Auto-save answer to backend (for refresh protection)
+        if (attempt?.id) {
+            try {
+                await attemptAPI.saveAnswer(attempt.id, {
+                    question_id: questionId,
+                    answer_text: answer
+                });
+            } catch (err) {
+                console.error('Failed to auto-save answer:', err);
+                // Don't show error to user, just log it
+            }
+        }
     };
 
     const handleSubmitQuiz = async (autoSubmit = false) => {
@@ -89,19 +226,31 @@ const QuizTaker = () => {
             return;
         }
 
-        setIsSubmitting(true);
-        try {
-            const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
-                question_id: parseInt(questionId),
-                answer: answer
-            }));
+        // Validate attempt exists
+        if (!attempt || !attempt.id) {
+            error('Quiz attempt not found. Please try starting the quiz again.');
+            navigate('/dashboard');
+            return;
+        }
 
+        setIsSubmitting(true);
+        const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
+            question_id: parseInt(questionId),
+            answer_text: answer
+        }));
+
+        try {
             const result = await attemptAPI.submitAttempt(attempt.id, formattedAnswers);
             
             success(autoSubmit ? 'Time up! Quiz submitted automatically.' : 'Quiz submitted successfully!');
             navigate(`/quiz-result/${attempt.id}`, { state: { result } });
         } catch (err) {
-            error(err.data?.detail || 'Failed to submit quiz');
+            const errorMessage = err.data?.detail || err.message || 'Failed to submit quiz';
+            error(errorMessage);
+            console.error('Quiz submission error:', err);
+            console.error('Attempt ID:', attempt?.id);
+            console.error('Formatted answers:', formattedAnswers);
+            setShowSubmitConfirm(false);
         } finally {
             setIsSubmitting(false);
         }
@@ -110,7 +259,21 @@ const QuizTaker = () => {
     const currentQuestion = quiz?.questions?.[currentQuestionIndex];
     const totalQuestions = quiz?.questions?.length || 0;
     const answeredCount = Object.keys(answers).length;
-    const timePercentage = quiz ? (timeRemaining / (quiz.duration_minutes * 60)) * 100 : 100;
+    const timePercentage = (calculatedDuration && timeRemaining !== null) ? (timeRemaining / (calculatedDuration * 60)) * 100 : 100;
+
+    // Show warning if time has expired
+    if (timeRemaining !== null && timeRemaining === 0 && !isSubmitting && attempt?.id) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-md">
+                    <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Time Expired!</h2>
+                    <p className="text-gray-600 mb-4">Your quiz time has ended. Submitting your answers...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto"></div>
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -118,6 +281,61 @@ const QuizTaker = () => {
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
                     <p className="mt-4 text-gray-600 text-lg">Loading quiz...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!quiz) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <AlertCircle className="text-red-600 mx-auto mb-4" size={48} />
+                    <p className="text-gray-600 text-lg">Quiz data not available</p>
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Check if quiz has no questions
+    if (!quiz.questions || quiz.questions.length === 0) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <AlertCircle className="text-orange-600 mx-auto mb-4" size={48} />
+                    <p className="text-gray-800 text-xl font-semibold mb-2">No Questions Available</p>
+                    <p className="text-gray-600 text-lg mb-4">This quiz doesn't have any questions yet.</p>
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Check if current question index is valid
+    if (!currentQuestion) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <AlertCircle className="text-red-600 mx-auto mb-4" size={48} />
+                    <p className="text-gray-800 text-xl font-semibold mb-2">Question Not Found</p>
+                    <p className="text-gray-600 text-lg mb-4">Unable to load the current question.</p>
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        Back to Dashboard
+                    </button>
                 </div>
             </div>
         );
@@ -142,9 +360,18 @@ const QuizTaker = () => {
 
                         {/* Timer */}
                         <div className="flex items-center space-x-6">
+                            {quiz?.is_live_session && (
+                                <div className="flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full border-2 border-red-500 animate-pulse">
+                                    <Circle className="fill-current mr-2" size={12} />
+                                    <span className="text-sm font-bold">LIVE</span>
+                                </div>
+                            )}
                             <div className="text-right">
-                                <div className="text-xs text-gray-500 mb-1">Time Remaining</div>
+                                <div className="text-xs text-gray-500 mb-1">
+                                    {quiz?.is_live_session ? 'Session Ends In' : 'Time Remaining'}
+                                </div>
                                 <div className={`text-2xl font-bold font-mono ${
+                                    timeRemaining === null ? 'text-gray-400' :
                                     timeRemaining < 60 ? 'text-red-600 animate-pulse' : 
                                     timeRemaining < 300 ? 'text-yellow-600' : 'text-blue-600'
                                 }`}>
@@ -195,14 +422,14 @@ const QuizTaker = () => {
                                         {['A', 'B', 'C', 'D'].map((option) => {
                                             const optionKey = `option_${option.toLowerCase()}`;
                                             const optionText = currentQuestion[optionKey];
-                                            const isSelected = answers[currentQuestion.id] === option;
+                                            const isSelected = answers[currentQuestion?.id] === option;
 
                                             if (!optionText) return null;
 
                                             return (
                                                 <button
                                                     key={option}
-                                                    onClick={() => handleAnswerSelect(currentQuestion.id, option)}
+                                                    onClick={() => handleAnswerSelect(currentQuestion?.id, option)}
                                                     className={`w-full text-left p-6 rounded-2xl border-2 transition-all duration-300 transform hover:scale-[1.02] ${
                                                         isSelected
                                                             ? 'border-blue-600 bg-blue-50 shadow-lg'
@@ -235,11 +462,11 @@ const QuizTaker = () => {
                                 {currentQuestion?.question_type === 'true_false' && (
                                     <>
                                         {['True', 'False'].map((option) => {
-                                            const isSelected = answers[currentQuestion.id] === option;
+                                            const isSelected = answers[currentQuestion?.id] === option;
                                             return (
                                                 <button
                                                     key={option}
-                                                    onClick={() => handleAnswerSelect(currentQuestion.id, option)}
+                                                    onClick={() => handleAnswerSelect(currentQuestion?.id, option)}
                                                     className={`w-full text-left p-6 rounded-2xl border-2 transition-all duration-300 transform hover:scale-[1.02] ${
                                                         isSelected
                                                             ? 'border-blue-600 bg-blue-50 shadow-lg'

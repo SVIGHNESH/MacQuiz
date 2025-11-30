@@ -26,17 +26,26 @@ async def create_quiz(
     - Scheduled start time
     - Grace period for late starts
     """
-    # Verify subject if provided
+    # Verify subject if provided (optional - set to None if not found)
     if quiz_data.subject_id:
         subject = db.query(Subject).filter(Subject.id == quiz_data.subject_id).first()
         if not subject:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subject not found"
-            )
+            # Don't fail, just set subject_id to None
+            print(f"Warning: Subject {quiz_data.subject_id} not found, creating quiz without subject")
+            quiz_data.subject_id = None
     
     # Calculate total marks
     total_marks = sum(q.marks for q in quiz_data.questions)
+    
+    # Validate live session settings
+    if quiz_data.is_live_session:
+        if not quiz_data.live_start_time or not quiz_data.duration_minutes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Live sessions require both live_start_time and duration_minutes"
+            )
+        # Calculate live_end_time based on start time + duration
+        quiz_data.live_end_time = quiz_data.live_start_time + timedelta(minutes=quiz_data.duration_minutes)
     
     # Create quiz
     db_quiz = Quiz(
@@ -49,6 +58,9 @@ async def create_quiz(
         scheduled_at=quiz_data.scheduled_at,
         duration_minutes=quiz_data.duration_minutes,
         grace_period_minutes=quiz_data.grace_period_minutes,
+        is_live_session=quiz_data.is_live_session,
+        live_start_time=quiz_data.live_start_time,
+        live_end_time=quiz_data.live_end_time,
         total_marks=total_marks,
         marks_per_correct=quiz_data.marks_per_correct,
         negative_marking=quiz_data.negative_marking
@@ -86,7 +98,33 @@ async def create_quiz(
     db.commit()
     db.refresh(db_quiz)
     
-    return db_quiz
+    # Return formatted quiz response with attempts count
+    from app.models.models import QuizAttempt
+    quiz_dict = {
+        "id": db_quiz.id,
+        "title": db_quiz.title,
+        "description": db_quiz.description,
+        "creator_id": db_quiz.creator_id,
+        "subject_id": db_quiz.subject_id,
+        "department": db_quiz.department,
+        "class_year": db_quiz.class_year,
+        "scheduled_at": db_quiz.scheduled_at,
+        "duration_minutes": db_quiz.duration_minutes,
+        "grace_period_minutes": db_quiz.grace_period_minutes,
+        "is_live_session": db_quiz.is_live_session,
+        "live_start_time": db_quiz.live_start_time,
+        "live_end_time": db_quiz.live_end_time,
+        "total_marks": db_quiz.total_marks,
+        "marks_per_correct": db_quiz.marks_per_correct,
+        "negative_marking": db_quiz.negative_marking,
+        "is_active": db_quiz.is_active,
+        "created_at": db_quiz.created_at,
+        "updated_at": db_quiz.updated_at,
+        "total_questions": len(db_quiz.questions) if db_quiz.questions else 0,
+        "attempts": db.query(QuizAttempt).filter(QuizAttempt.quiz_id == db_quiz.id).count()
+    }
+    
+    return quiz_dict
 
 @router.get("/", response_model=List[QuizResponse])
 async def get_all_quizzes(
@@ -109,18 +147,14 @@ async def get_all_quizzes(
     
     # Role-based filtering
     if current_user.role == "student":
+        from app.models.models import QuizAssignment
+        
+        # Only show quizzes that are:
+        # 1. Active AND
+        # 2. Assigned to this student (via QuizAssignment table)
         query = query.filter(Quiz.is_active == True)
-        # Student-specific filters
-        if current_user.department:
-            query = query.filter(
-                (Quiz.department == current_user.department) | 
-                (Quiz.department == None)
-            )
-        if current_user.class_year:
-            query = query.filter(
-                (Quiz.class_year == current_user.class_year) | 
-                (Quiz.class_year == None)
-            )
+        query = query.join(QuizAssignment, Quiz.id == QuizAssignment.quiz_id)
+        query = query.filter(QuizAssignment.student_id == current_user.id)
     elif current_user.role == "teacher":
         query = query.filter(Quiz.creator_id == current_user.id)
     
@@ -138,9 +172,61 @@ async def get_all_quizzes(
         query = query.filter(Quiz.class_year == class_year)
     
     quizzes = query.order_by(Quiz.created_at.desc()).offset(skip).limit(limit).all()
-    return quizzes
+    
+    # Add total_questions and attempts count to each quiz
+    result = []
+    for quiz in quizzes:
+        from app.models.models import QuizAttempt
+        from datetime import datetime, timedelta
+        
+        # For students: Filter live session quizzes by timing
+        if current_user.role == "student" and quiz.is_live_session:
+            now = datetime.now()
+            if quiz.live_start_time and quiz.live_end_time:
+                # Only show quiz during the session (from start time)
+                # Skip if current time is before start time
+                if now < quiz.live_start_time:
+                    continue
+                
+                # Allow joining up to 5 minutes after start (grace period)
+                grace_end = quiz.live_start_time + timedelta(minutes=5)
+                
+                # Skip if grace period has expired
+                if now > grace_end:
+                    continue
+                
+                # Skip if session has ended
+                if now > quiz.live_end_time:
+                    continue
+        
+        quiz_dict = {
+            "id": quiz.id,
+            "title": quiz.title,
+            "description": quiz.description,
+            "creator_id": quiz.creator_id,
+            "subject_id": quiz.subject_id,
+            "department": quiz.department,
+            "class_year": quiz.class_year,
+            "scheduled_at": quiz.scheduled_at,
+            "duration_minutes": quiz.duration_minutes,
+            "grace_period_minutes": quiz.grace_period_minutes,
+            "is_live_session": quiz.is_live_session,
+            "live_start_time": quiz.live_start_time,
+            "live_end_time": quiz.live_end_time,
+            "total_marks": quiz.total_marks,
+            "marks_per_correct": quiz.marks_per_correct,
+            "negative_marking": quiz.negative_marking,
+            "is_active": quiz.is_active,
+            "created_at": quiz.created_at,
+            "updated_at": quiz.updated_at,
+            "total_questions": db.query(Question).filter(Question.quiz_id == quiz.id).count(),
+            "attempts": db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz.id).count()
+        }
+        result.append(quiz_dict)
+    
+    return result
 
-@router.get("/{quiz_id}", response_model=QuizDetailResponse)
+@router.get("/{quiz_id}")
 async def get_quiz(
     quiz_id: int,
     include_answers: bool = False,
@@ -149,7 +235,7 @@ async def get_quiz(
 ):
     """
     Get quiz details with questions
-    - include_answers: Only for teachers/admin after quiz submission
+    - include_answers: For teachers/admin to see correct answers when editing
     """
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
@@ -165,9 +251,36 @@ async def get_quiz(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Quiz not available"
             )
-        # Check if quiz is scheduled and within grace period
-        if quiz.scheduled_at:
-            now = datetime.utcnow()
+        
+        # For live sessions, enforce strict timing
+        if quiz.is_live_session and quiz.live_start_time:
+            now = datetime.now()
+            
+            # Cannot access before start time
+            if now < quiz.live_start_time:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Quiz not started yet. Starts at {quiz.live_start_time}"
+                )
+            
+            # 5-minute grace period after start
+            grace_end = quiz.live_start_time + timedelta(minutes=5)
+            if now > grace_end:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Quiz grace period expired. Cannot join after 5 minutes of start time."
+                )
+            
+            # Check if session has ended
+            if quiz.live_end_time and now > quiz.live_end_time:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Quiz session has ended."
+                )
+        
+        # For scheduled (non-live) quizzes
+        elif quiz.scheduled_at:
+            now = datetime.now()
             grace_end = quiz.scheduled_at + timedelta(minutes=quiz.grace_period_minutes)
             if now < quiz.scheduled_at:
                 raise HTTPException(
@@ -180,7 +293,82 @@ async def get_quiz(
                     detail="Quiz grace period expired. Cannot start now."
                 )
     
-    return quiz
+    # Return quiz with answers included for teachers/admins or when explicitly requested
+    if current_user.role in ["admin", "teacher"] or include_answers:
+        # Build response manually to include correct_answer field
+        questions_with_answers = []
+        for q in quiz.questions:
+            questions_with_answers.append({
+                "id": q.id,
+                "quiz_id": q.quiz_id,
+                "question_text": q.question_text,
+                "question_type": q.question_type,
+                "option_a": q.option_a,
+                "option_b": q.option_b,
+                "option_c": q.option_c,
+                "option_d": q.option_d,
+                "correct_answer": q.correct_answer,
+                "marks": q.marks,
+                "order": q.order
+            })
+        
+        return {
+            "id": quiz.id,
+            "title": quiz.title,
+            "description": quiz.description,
+            "creator_id": quiz.creator_id,
+            "subject_id": quiz.subject_id,
+            "department": quiz.department,
+            "class_year": quiz.class_year,
+            "scheduled_at": quiz.scheduled_at,
+            "duration_minutes": quiz.duration_minutes,
+            "grace_period_minutes": quiz.grace_period_minutes,
+            "total_marks": quiz.total_marks,
+            "marks_per_correct": quiz.marks_per_correct,
+            "negative_marking": quiz.negative_marking,
+            "is_active": quiz.is_active,
+            "created_at": quiz.created_at,
+            "updated_at": quiz.updated_at,
+            "total_questions": len(quiz.questions),
+            "questions": questions_with_answers
+        }
+    
+    # For students, return quiz without correct answers
+    questions_without_answers = []
+    for q in quiz.questions:
+        questions_without_answers.append({
+            "id": q.id,
+            "quiz_id": q.quiz_id,
+            "question_text": q.question_text,
+            "question_type": q.question_type,
+            "option_a": q.option_a,
+            "option_b": q.option_b,
+            "option_c": q.option_c,
+            "option_d": q.option_d,
+            "marks": q.marks,
+            "order": q.order
+        })
+    
+    return {
+        "id": quiz.id,
+        "title": quiz.title,
+        "description": quiz.description,
+        "creator_id": quiz.creator_id,
+        "subject_id": quiz.subject_id,
+        "department": quiz.department,
+        "class_year": quiz.class_year,
+        "scheduled_at": quiz.scheduled_at,
+        "duration_minutes": quiz.duration_minutes,
+        "grace_period_minutes": quiz.grace_period_minutes,
+        "total_marks": quiz.total_marks,
+        "marks_per_correct": quiz.marks_per_correct,
+        "negative_marking": quiz.negative_marking,
+        "is_active": quiz.is_active,
+        "created_at": quiz.created_at,
+        "updated_at": quiz.updated_at,
+        "total_questions": len(quiz.questions),
+        "questions": questions_without_answers
+    }
 
 
 @router.get("/{quiz_id}/eligibility")
@@ -191,6 +379,7 @@ async def check_quiz_eligibility(
 ):
     """
     Check if student can take the quiz
+    Teachers and admins can preview quizzes anytime (bypass all restrictions)
     """
     from app.models.models import QuizAttempt
     
@@ -201,27 +390,89 @@ async def check_quiz_eligibility(
             detail="Quiz not found"
         )
     
-    if not quiz.is_active:
+    # Teachers and admins can always preview quizzes (bypass all restrictions)
+    is_teacher_or_admin = current_user.role in ["teacher", "admin"]
+    
+    if not quiz.is_active and not is_teacher_or_admin:
         return {
             "eligible": False,
             "reason": "Quiz is not active"
         }
     
-    # Check if already attempted
-    existing_attempt = db.query(QuizAttempt).filter(
+    # Check if already completed this quiz (only for students)
+    if not is_teacher_or_admin:
+        completed_attempt = db.query(QuizAttempt).filter(
+            QuizAttempt.quiz_id == quiz_id,
+            QuizAttempt.student_id == current_user.id,
+            QuizAttempt.is_completed == True
+        ).first()
+        
+        if completed_attempt:
+            return {
+                "eligible": False,
+                "reason": "Already completed this quiz"
+            }
+    
+    # Check if there's an active (incomplete) attempt
+    active_attempt = db.query(QuizAttempt).filter(
         QuizAttempt.quiz_id == quiz_id,
-        QuizAttempt.student_id == current_user.id
+        QuizAttempt.student_id == current_user.id,
+        QuizAttempt.is_completed == False
     ).first()
     
-    if existing_attempt:
-        return {
-            "eligible": False,
-            "reason": "Already attempted this quiz"
-        }
+    now = datetime.now()
+    calculated_duration = quiz.duration_minutes
     
-    # Check schedule and grace period
-    if quiz.scheduled_at:
-        now = datetime.utcnow()
+    # For live sessions, enforce strict timing and calculate remaining time (only for students)
+    if quiz.is_live_session and quiz.live_start_time and not is_teacher_or_admin:
+        # Cannot join before start time
+        if now < quiz.live_start_time:
+            return {
+                "eligible": False,
+                "reason": f"Quiz starts at {quiz.live_start_time}",
+                "scheduled_at": quiz.live_start_time
+            }
+        
+        # 5-minute grace period after start
+        grace_end = quiz.live_start_time + timedelta(minutes=5)
+        if now > grace_end:
+            return {
+                "eligible": False,
+                "reason": "Quiz grace period expired. Cannot join after 5 minutes of start time."
+            }
+        
+        # Check if session has ended
+        if quiz.live_end_time and now > quiz.live_end_time:
+            return {
+                "eligible": False,
+                "reason": "Quiz session has ended"
+            }
+        
+        # Calculate remaining time based on active attempt OR when student would join
+        if active_attempt:
+            # Student already started - calculate from their attempt start time
+            elapsed_minutes = (now - active_attempt.started_at).total_seconds() / 60
+            # Use the duration they were allocated when they started (from live_start_time)
+            original_elapsed = (active_attempt.started_at - quiz.live_start_time).total_seconds() / 60
+            allocated_duration = quiz.duration_minutes - original_elapsed
+            remaining_duration = int(allocated_duration - elapsed_minutes)
+        else:
+            # New join - calculate from live_start_time
+            elapsed_minutes = (now - quiz.live_start_time).total_seconds() / 60
+            remaining_duration = int(quiz.duration_minutes - elapsed_minutes)
+        
+        # If no time left, mark as ineligible
+        if remaining_duration <= 0:
+            return {
+                "eligible": False,
+                "reason": "Quiz time has expired"
+            }
+        
+        # Ensure at least 1 minute remains for eligible students
+        calculated_duration = max(1, remaining_duration)
+    
+    # For scheduled (non-live) quizzes (only enforce for students)
+    elif quiz.scheduled_at and not is_teacher_or_admin:
         grace_end = quiz.scheduled_at + timedelta(minutes=quiz.grace_period_minutes)
         
         if now < quiz.scheduled_at:
@@ -241,8 +492,10 @@ async def check_quiz_eligibility(
         "eligible": True,
         "quiz_id": quiz_id,
         "title": quiz.title,
-        "duration_minutes": quiz.duration_minutes,
-        "total_marks": quiz.total_marks
+        "duration_minutes": calculated_duration,
+        "total_marks": quiz.total_marks,
+        "is_live_session": quiz.is_live_session,
+        "live_start_time": quiz.live_start_time if quiz.is_live_session else None
     }
 
 @router.put("/{quiz_id}", response_model=QuizResponse, dependencies=[Depends(require_role(["admin", "teacher"]))])
@@ -267,13 +520,59 @@ async def update_quiz(
         )
     
     update_data = quiz_data.dict(exclude_unset=True)
+    
+    # Handle student assignments if provided
+    assigned_student_ids = update_data.pop('assigned_student_ids', None)
+    if assigned_student_ids is not None:
+        from app.models.models import QuizAssignment
+        
+        # Delete existing assignments
+        db.query(QuizAssignment).filter(QuizAssignment.quiz_id == quiz_id).delete()
+        
+        # Add new assignments
+        for student_id in assigned_student_ids:
+            assignment = QuizAssignment(quiz_id=quiz_id, student_id=student_id)
+            db.add(assignment)
+    
+    # If updating to live session, validate and calculate end time
+    if update_data.get('is_live_session'):
+        if 'live_start_time' in update_data and update_data['live_start_time']:
+            duration = update_data.get('duration_minutes', quiz.duration_minutes)
+            if duration:
+                update_data['live_end_time'] = update_data['live_start_time'] + timedelta(minutes=duration)
+    
     for field, value in update_data.items():
         setattr(quiz, field, value)
     
     db.commit()
     db.refresh(quiz)
     
-    return quiz
+    # Convert quiz to dict and set attempts count (not the list)
+    quiz_dict = {
+        "id": quiz.id,
+        "title": quiz.title,
+        "description": quiz.description,
+        "creator_id": quiz.creator_id,
+        "subject_id": quiz.subject_id,
+        "department": quiz.department,
+        "class_year": quiz.class_year,
+        "scheduled_at": quiz.scheduled_at,
+        "duration_minutes": quiz.duration_minutes,
+        "grace_period_minutes": quiz.grace_period_minutes,
+        "is_live_session": quiz.is_live_session,
+        "live_start_time": quiz.live_start_time,
+        "live_end_time": quiz.live_end_time,
+        "total_marks": quiz.total_marks,
+        "marks_per_correct": quiz.marks_per_correct,
+        "negative_marking": quiz.negative_marking,
+        "is_active": quiz.is_active,
+        "created_at": quiz.created_at,
+        "updated_at": quiz.updated_at,
+        "total_questions": len(quiz.questions) if quiz.questions else 0,
+        "attempts": len(quiz.attempts) if quiz.attempts else 0
+    }
+    
+    return quiz_dict
 
 @router.delete("/{quiz_id}", dependencies=[Depends(require_role(["admin", "teacher"]))])
 async def delete_quiz(
@@ -281,6 +580,8 @@ async def delete_quiz(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from app.models.models import QuizAttempt, Question, Answer, QuizAssignment
+    
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
         raise HTTPException(
@@ -295,10 +596,33 @@ async def delete_quiz(
             detail="Not enough permissions"
         )
     
-    db.delete(quiz)
-    db.commit()
-    
-    return {"message": "Quiz deleted successfully"}
+    try:
+        # Delete in correct order to respect foreign key constraints:
+        # 1. First delete answers (references quiz_attempts)
+        attempt_ids = [attempt.id for attempt in db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).all()]
+        if attempt_ids:
+            db.query(Answer).filter(Answer.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
+        
+        # 2. Delete quiz attempts (references quiz)
+        db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).delete()
+        
+        # 3. Delete quiz assignments (references quiz)
+        db.query(QuizAssignment).filter(QuizAssignment.quiz_id == quiz_id).delete()
+        
+        # 4. Delete questions (references quiz)
+        db.query(Question).filter(Question.quiz_id == quiz_id).delete()
+        
+        # 5. Finally delete the quiz
+        db.delete(quiz)
+        db.commit()
+        
+        return {"message": "Quiz deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete quiz: {str(e)}"
+        )
 
 
 @router.get("/{quiz_id}/statistics")
@@ -369,6 +693,57 @@ async def get_quiz_statistics(
         "highest_score": highest_score,
         "lowest_score": lowest_score,
         "pass_rate": round((completed_attempts / total_attempts * 100), 2) if total_attempts > 0 else 0
+    }
+
+
+@router.get("/{quiz_id}/assignments")
+async def get_quiz_assignments(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["admin", "teacher"]))
+):
+    """
+    Get assignment statistics for a quiz (Teacher/Admin only)
+    Returns count of assigned and unassigned students
+    """
+    from app.models.models import QuizAssignment
+    
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found"
+        )
+    
+    # Get all students
+    all_students = db.query(User).filter(User.role == "student", User.is_active == True).all()
+    total_students = len(all_students)
+    
+    # Get assigned students
+    assigned = db.query(QuizAssignment).filter(QuizAssignment.quiz_id == quiz_id).all()
+    assigned_count = len(assigned)
+    assigned_student_ids = [a.student_id for a in assigned]
+    
+    # Get assigned student details
+    assigned_students = db.query(User).filter(User.id.in_(assigned_student_ids)).all() if assigned_student_ids else []
+    
+    return {
+        "quiz_id": quiz_id,
+        "quiz_title": quiz.title,
+        "total_students": total_students,
+        "assigned_count": assigned_count,
+        "unassigned_count": total_students - assigned_count,
+        "assigned_students": [
+            {
+                "id": s.id,
+                "email": s.email,
+                "first_name": s.first_name,
+                "last_name": s.last_name,
+                "department": s.department,
+                "class_year": s.class_year
+            }
+            for s in assigned_students
+        ]
     }
 
 
