@@ -104,12 +104,8 @@ export default function Login() {
                 
                 // Show success screen briefly before navigating
                 setTimeout(() => {
-                    // Route based on user role
-                    if (result.user.role === 'student') {
-                        navigate("/student-dashboard");
-                    } else {
-                        navigate("/dashboard");
-                    }
+                    // All users now go to unified dashboard
+                    navigate("/dashboard");
                 }, 2000);
             } else {
                 error(result.error?.data?.detail || "Login failed. Please check your credentials.");

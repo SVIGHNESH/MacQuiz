@@ -4,8 +4,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import Login from "./pages/login";
-import Dashboard from "./pages/dashBoard";
-import StudentDashboard from "./pages/studentDashboard";
+import GlobalDashboard from "./pages/GlobalDashboard";
 
 export default function App() {
   return (
@@ -18,15 +17,16 @@ export default function App() {
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <GlobalDashboard />
                 </ProtectedRoute>
               } 
             />
+            {/* Legacy route for backward compatibility */}
             <Route 
               path="/student-dashboard" 
               element={
                 <ProtectedRoute>
-                  <StudentDashboard />
+                  <GlobalDashboard />
                 </ProtectedRoute>
               } 
             />
