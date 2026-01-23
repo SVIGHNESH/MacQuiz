@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : 'http://3.110.145.152/');
+// Remove trailing slash from API_BASE_URL to avoid double-slash issues
+const rawApiUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : 'http://3.110.145.152:8000');
+export const API_BASE_URL = rawApiUrl.replace(/\/+$/, '');
 console.log('🔧 [v2024-11-24-4:15pm] API Configuration:', { 
     API_BASE_URL, 
     ENV_VALUE: import.meta.env.VITE_API_BASE_URL,
