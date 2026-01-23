@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Upload, Download, CheckCircle, AlertCircle, Users, FileText, Eye, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState(null);
@@ -174,7 +175,7 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
 
             // Fetch existing users to check for duplicates
             const token = localStorage.getItem('access_token');
-            const response = await fetch('http://localhost:8000/api/v1/users/', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/users/`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -222,7 +223,7 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
                 setUploadProgress(prev => Math.min(prev + 10, 90));
             }, 200);
 
-            const response = await fetch('http://localhost:8000/api/v1/users/bulk-upload', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/users/bulk-upload`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`

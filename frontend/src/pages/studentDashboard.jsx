@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { quizAPI, attemptAPI } from '../services/api';
+import { quizAPI, attemptAPI, API_BASE_URL } from '../services/api';
 import {
     BookOpen, Trophy, Clock, LogOut, User, TrendingUp,
     Calendar, CheckCircle, XCircle, Award, BarChart3, FileText,
@@ -80,7 +80,7 @@ const StudentDashboard = () => {
         } catch (err) {
             // Show specific error for network issues
             if (err.status === 0) {
-                error('Cannot connect to server. Please ensure the backend is running on http://localhost:8000');
+                error(`Cannot connect to server. Please ensure the backend is reachable at ${API_BASE_URL || 'your configured API URL'}`);
             } else {
                 error(err.data?.detail || err.message || 'Failed to load dashboard data');
             }

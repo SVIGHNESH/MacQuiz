@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '');
 console.log('🔧 [v2024-11-24-4:15pm] API Configuration:', { 
     API_BASE_URL, 
     ENV_VALUE: import.meta.env.VITE_API_BASE_URL,
@@ -15,6 +15,13 @@ class APIError extends Error {
 }
 
 async function fetchAPI(endpoint, options = {}) {
+    if (!API_BASE_URL) {
+        throw new APIError(
+            'VITE_API_BASE_URL is not configured for production. Set it in your Vercel project environment variables.',
+            0,
+            { detail: 'Missing VITE_API_BASE_URL' }
+        );
+    }
     const url = `${API_BASE_URL}${endpoint}`;
     const token = localStorage.getItem('access_token');
     

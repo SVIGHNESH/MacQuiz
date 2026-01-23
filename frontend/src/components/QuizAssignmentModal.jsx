@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Users, UserCheck, Search, Filter, Check, Calendar, Clock } from 'lucide-react';
-import { userAPI } from '../services/api';
+import { userAPI, API_BASE_URL } from '../services/api';
 
 const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
     const [students, setStudents] = useState([]);
@@ -51,7 +51,6 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
     const loadAssignedStudents = async () => {
         // Load currently assigned students from backend
         try {
-            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
             const response = await fetch(`${API_BASE_URL}/api/v1/quizzes/${quiz.id}/assignments`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('access_token')}`
@@ -155,7 +154,6 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
         setIsLoading(true);
         try {
             // Update quiz in backend - activate quiz with live session settings and student assignments
-            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
             const updatePayload = {
                 is_active: true,
                 is_live_session: isLiveSession,

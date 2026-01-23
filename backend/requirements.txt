@@ -8,5 +8,4 @@ bcrypt==4.2.1
 python-multipart==0.0.19
 alembic==1.14.0
 python-dotenv==1.0.1
-mysqlclient==2.2.4
 pymysql==1.1.1

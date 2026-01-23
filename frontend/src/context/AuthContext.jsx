@@ -68,6 +68,9 @@ export const AuthProvider = ({ children }) => {
         authAPI.logout();
         setUser(null);
         setIsAuthenticated(false);
+        
+        // Clear any cached data
+        sessionStorage.clear();
     };
 
     const value = {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Upload, Download, CheckCircle, AlertCircle, FileText, Eye, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState(null);
@@ -226,7 +227,6 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
                 try {
                     console.log('Uploading quiz:', quiz.title, quiz);
                     
-                    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
                     const response = await fetch(`${API_BASE_URL}/api/v1/quizzes/`, {
                         method: 'POST',
                         headers: {

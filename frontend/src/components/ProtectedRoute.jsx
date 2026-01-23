@@ -24,7 +24,7 @@ export const ProtectedRoute = ({ children }) => {
 };
 
 export const PublicRoute = ({ children }) => {
-    const { isAuthenticated, isLoading, user } = useAuth();
+    const { isAuthenticated, isLoading } = useAuth();
 
     if (isLoading) {
         return (
@@ -35,11 +35,7 @@ export const PublicRoute = ({ children }) => {
     }
 
     if (isAuthenticated) {
-        if (user?.role === 'student') {
-            return <Navigate to="/student-dashboard" replace />;
-        } else {
-            return <Navigate to="/admin-dashboard" replace />;
-        }
+        return <Navigate to="/dashboard" replace />;
     }
 
     return children;
