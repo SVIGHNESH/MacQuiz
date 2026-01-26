@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -13,8 +13,16 @@ class UserBase(BaseModel):
     student_id: Optional[str] = None
     phone_number: Optional[str] = None
 
+    @field_validator("role")
+    @classmethod
+    def normalize_and_validate_role(cls, value: str) -> str:
+        role = (value or "").strip().lower()
+        if role not in {"admin", "teacher", "student"}:
+            raise ValueError("role must be one of: admin, teacher, student")
+        return role
+
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(min_length=8)
 
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -23,7 +31,7 @@ class UserUpdate(BaseModel):
     class_year: Optional[str] = None
     phone_number: Optional[str] = None
     is_active: Optional[bool] = None
-    password: Optional[str] = None  # Allow password reset
+    password: Optional[str] = Field(default=None, min_length=8)  # Allow password reset
 
 class UserResponse(UserBase):
     id: int
@@ -46,6 +54,11 @@ class TokenData(BaseModel):
 class LoginRequest(BaseModel):
     username: str  # email
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
 
 # Subject Schemas
 class SubjectBase(BaseModel):

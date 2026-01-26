@@ -1,11 +1,13 @@
 // Remove trailing slash from API_BASE_URL to avoid double-slash issues
 const rawApiUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : 'http://3.110.145.152:8000');
 export const API_BASE_URL = rawApiUrl.replace(/\/+$/, '');
-console.log('🔧 [v2024-11-24-4:15pm] API Configuration:', { 
-    API_BASE_URL, 
-    ENV_VALUE: import.meta.env.VITE_API_BASE_URL,
-    MODE: import.meta.env.MODE 
-});
+if (import.meta.env.DEV) {
+    console.log('🔧 API Configuration:', {
+        API_BASE_URL,
+        ENV_VALUE: import.meta.env.VITE_API_BASE_URL,
+        MODE: import.meta.env.MODE,
+    });
+}
 
 class APIError extends Error {
     constructor(message, status, data) {
@@ -13,6 +15,20 @@ class APIError extends Error {
         this.status = status;
         this.data = data;
         this.name = 'APIError';
+    }
+}
+
+function isJwtExpired(token) {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return false;
+        const payloadJson = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+        const payload = JSON.parse(payloadJson);
+        if (!payload.exp) return false;
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        return nowSeconds >= Number(payload.exp);
+    } catch {
+        return false;
     }
 }
 
@@ -26,21 +42,45 @@ async function fetchAPI(endpoint, options = {}) {
     }
     const url = `${API_BASE_URL}${endpoint}`;
     const token = localStorage.getItem('access_token');
+    if (token && isJwtExpired(token)) {
+        localStorage.removeItem('access_token');
+        // If the token is expired, treat as logged out
+        window.location.href = '/';
+        throw new APIError('Session expired. Please log in again.', 401, { detail: 'Token expired' });
+    }
     
     const headers = {
-        'Content-Type': 'application/json',
         ...options.headers,
     };
+
+    const body = options.body;
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+    const isUrlEncoded = typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams;
+
+    // Default to JSON only when we're not sending multipart/form-data or x-www-form-urlencoded
+    if (!isFormData && !isUrlEncoded && !headers['Content-Type'] && !headers['content-type']) {
+        headers['Content-Type'] = 'application/json';
+    }
     
     if (token && !options.skipAuth) {
         headers['Authorization'] = `Bearer ${token}`;
     }
     
     try {
-        const response = await fetch(url, {
-            ...options,
-            headers,
-        });
+        const controller = new AbortController();
+        const timeoutMs = options.timeoutMs ?? 20000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        let response;
+        try {
+            response = await fetch(url, {
+                ...options,
+                headers,
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
         
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -72,7 +112,9 @@ async function fetchAPI(endpoint, options = {}) {
         // Network error or other fetch failures
         console.error('Network error:', error);
         console.error('Attempted URL:', url);
-        console.error('Request options:', options);
+        if (import.meta.env.DEV) {
+            console.error('Request options:', options);
+        }
         throw new APIError(
             error.message || 'Network error - please check if the server is running',
             0,
@@ -101,8 +143,20 @@ export const authAPI = {
     },
     
     logout: () => {
+        // Best-effort server-side revoke; ignore failures
+        fetchAPI('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
         localStorage.removeItem('access_token');
     },
+
+    changePassword: (currentPassword, newPassword) => fetchAPI('/api/v1/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword,
+        }),
+    }),
+
+    logoutAll: () => fetchAPI('/api/v1/auth/logout-all', { method: 'POST' }),
 };
 
 export const userAPI = {

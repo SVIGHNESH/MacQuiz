@@ -1,24 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from app.db.database import get_db
 from app.models.models import User
-from app.schemas.schemas import Token, LoginRequest, UserResponse
-from app.core.security import verify_password, create_access_token
+from app.models.models import RevokedToken, UserTokenBlock
+from app.schemas.schemas import Token, LoginRequest, UserResponse, ChangePasswordRequest
+from app.core.security import verify_password, create_access_token, get_password_hash
 from app.core.config import settings
-from app.core.deps import get_current_active_user
+from app.core.deps import get_current_active_user, oauth2_scheme
+from app.core.rate_limit import check_rate_limit
 
 router = APIRouter()
 
 @router.post("/login", response_model=Token)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     """
     OAuth2 compatible login with form data (for Swagger UI)
     """
+    client_ip = request.client.host if request.client else "unknown"
+    rl = check_rate_limit(f"login:{client_ip}", limit=10, window_seconds=300)
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later.",
+            headers={"Retry-After": str(rl.retry_after_seconds or 60)},
+        )
+
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -50,12 +62,22 @@ async def login(
 
 @router.post("/login-json", response_model=Token)
 async def login_json(
+    request: Request,
     login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
     """
     JSON-based login (for frontend)
     """
+    client_ip = request.client.host if request.client else "unknown"
+    rl = check_rate_limit(f"login:{client_ip}", limit=10, window_seconds=300)
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later.",
+            headers={"Retry-After": str(rl.retry_after_seconds or 60)},
+        )
+
     user = db.query(User).filter(User.email == login_data.username).first()
     if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
@@ -92,3 +114,86 @@ async def get_current_user(
     Get current logged-in user
     """
     return current_user
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Allow the current user to change their password."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    current_user.last_active = datetime.utcnow()
+    db.commit()
+
+    # Invalidate all previous sessions for this user and mint a new token
+    block = db.query(UserTokenBlock).filter(UserTokenBlock.user_id == current_user.id).first()
+    if block:
+        block.revoked_before = datetime.utcnow()
+    else:
+        db.add(UserTokenBlock(user_id=current_user.id, revoked_before=datetime.utcnow()))
+    db.commit()
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    new_token = create_access_token(
+        data={"sub": current_user.email},
+        expires_delta=access_token_expires,
+    )
+
+    # Backward compatible response (frontend can update token if provided)
+    return {"success": True, "access_token": new_token, "token_type": "bearer"}
+
+
+@router.post("/logout")
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Revoke the current access token (single-session logout)."""
+    from app.core.security import decode_access_token
+
+    payload = decode_access_token(token)
+    jti = (payload or {}).get("jti")
+    exp = (payload or {}).get("exp")
+
+    if jti:
+        # best-effort insert; ignore duplicates
+        exists = db.query(RevokedToken).filter(RevokedToken.jti == jti).first()
+        if not exists:
+            expires_at = None
+            try:
+                if exp:
+                    # jose may decode exp into int timestamp
+                    expires_at = datetime.utcfromtimestamp(int(exp))
+            except Exception:
+                expires_at = None
+
+            db.add(RevokedToken(jti=jti, subject=current_user.email, expires_at=expires_at))
+            db.commit()
+
+    return {"success": True}
+
+
+@router.post("/logout-all")
+async def logout_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Invalidate all tokens issued before now for this user."""
+    now = datetime.utcnow()
+    block = db.query(UserTokenBlock).filter(UserTokenBlock.user_id == current_user.id).first()
+    if block:
+        block.revoked_before = now
+    else:
+        db.add(UserTokenBlock(user_id=current_user.id, revoked_before=now))
+    db.commit()
+
+    return {"success": True}

@@ -73,12 +73,32 @@ export const AuthProvider = ({ children }) => {
         sessionStorage.clear();
     };
 
+    const logoutAll = async () => {
+        try {
+            await authAPI.logoutAll();
+        } catch {
+            // ignore
+        } finally {
+            logout();
+        }
+    };
+
+    const changePassword = async (currentPassword, newPassword) => {
+        const res = await authAPI.changePassword(currentPassword, newPassword);
+        if (res?.access_token) {
+            localStorage.setItem('access_token', res.access_token);
+        }
+        return res;
+    };
+
     const value = {
         user,
         isAuthenticated,
         isLoading,
         login,
         logout,
+        logoutAll,
+        changePassword,
         checkAuth,
     };
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { userAPI, quizAPI, attemptAPI } from "../services/api";
+import { userAPI, quizAPI, attemptAPI, analyticsAPI } from "../services/api";
 import { getDepartments } from "../utils/settingsHelper";
 import BulkUploadModal from "../components/BulkUploadModal";
 import BulkQuizUploadModal from "../components/BulkQuizUploadModal";
@@ -2891,71 +2891,52 @@ const StudentResultsView = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [filterQuiz, setFilterQuiz] = useState('all');
     const [filterStudent, setFilterStudent] = useState('all');
+    const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
         fetchAllData();
+    }, [refreshKey]);
+
+    useEffect(() => {
+        const onFocus = () => setRefreshKey(prev => prev + 1);
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
     }, []);
 
     const fetchAllData = async () => {
         setIsLoading(true);
         try {
-            console.log('📊 Fetching student results data...');
-            
             // Fetch each resource individually to identify which one fails
             let usersData, quizzesData, attemptsData;
             
             try {
-                console.log('Fetching users...');
                 usersData = await userAPI.getAllUsers();
-                console.log('✅ Users fetched:', usersData?.length);
             } catch (err) {
-                console.error('❌ Failed to fetch users:', err);
                 throw new Error(`Users API failed: ${err.message}`);
             }
             
             try {
-                console.log('Fetching quizzes...');
                 quizzesData = await quizAPI.getAllQuizzes();
-                console.log('✅ Quizzes fetched:', quizzesData?.length);
             } catch (err) {
-                console.error('❌ Failed to fetch quizzes:', err);
                 throw new Error(`Quizzes API failed: ${err.message}`);
             }
             
             try {
-                console.log('📊 Fetching attempts...');
-                console.log('API URL:', `${import.meta.env.VITE_API_BASE_URL}/api/v1/attempts/all-attempts`);
                 attemptsData = await attemptAPI.getAllAttempts({});
-                console.log('✅ Attempts fetched successfully');
-                console.log('Attempts count:', attemptsData?.length);
-                console.log('Attempts data:', attemptsData);
             } catch (err) {
-                console.error('❌ ATTEMPTS API ERROR - START ❌');
-                console.error('Raw error object:', err);
-                console.error('Error constructor:', err?.constructor?.name);
-                console.error('Error toString:', String(err));
-                
                 // For APIError objects from fetchAPI
                 if (err?.status) {
-                    console.error(`HTTP ${err.status}:`, err.data?.detail || err.message);
-                    
                     if (err.status === 403) {
                         attemptsData = [];
-                        console.warn('⚠️ Permission denied - showing empty results');
                     } else if (err.status === 404) {
                         attemptsData = [];
-                        console.warn('⚠️ Endpoint not found - showing empty results');  
                     } else {
                         attemptsData = [];
-                        console.warn(`⚠️ API error ${err.status} - showing empty results`);
                     }
                 } else {
                     // Network or other error
-                    console.error('Network or unknown error');
                     attemptsData = [];
                 }
-                
-                console.error('❌ ATTEMPTS API ERROR - END ❌');
                 // Don't throw - just show empty results
             }
 
@@ -2963,10 +2944,7 @@ const StudentResultsView = () => {
             setStudents(studentsList);
             setQuizzes(quizzesData || []);
             setAttempts(attemptsData || []);
-            
-            console.log('✅ All data loaded successfully');
         } catch (err) {
-            console.error('❌ Error loading student results:', err);
             // Better error message formatting
             let errorMessage = 'Failed to load student results';
             if (typeof err === 'string') {
@@ -3037,14 +3015,24 @@ const StudentResultsView = () => {
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">Student Quiz Results</h2>
                     <p className="text-gray-600">View all student quiz attempts and performance</p>
                 </div>
-                <button
-                    onClick={exportToCSV}
-                    disabled={filteredAttempts.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                    <Download size={20} />
-                    Export Report
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setRefreshKey(prev => prev + 1)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                        title="Refresh results"
+                    >
+                        <RefreshCw size={20} />
+                        Refresh
+                    </button>
+                    <button
+                        onClick={exportToCSV}
+                        disabled={filteredAttempts.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <Download size={20} />
+                        Export Report
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -3209,67 +3197,211 @@ export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [userViewMode, setUserViewMode] = useState('list');
     const [userListRefresh, setUserListRefresh] = useState(0);
-    const [allUsers, setAllUsers] = useState([]);
     const [statsLoading, setStatsLoading] = useState(true);
+    const [statsRefresh, setStatsRefresh] = useState(0);
+    const [statsData, setStatsData] = useState(null);
 
-    // Fetch all users for dashboard stats
-    useEffect(() => {
-        const fetchDashboardStats = async () => {
-            setStatsLoading(true);
-            try {
-                const users = await userAPI.getAllUsers();
-                setAllUsers(users);
-            } catch (err) {
-                // Silently fail, will show 0 counts
-            } finally {
-                setStatsLoading(false);
+    const fetchDashboardStats = useCallback(async () => {
+        setStatsLoading(true);
+        try {
+            if (user?.role === 'admin') {
+                const data = await analyticsAPI.getDashboardStats();
+                setStatsData({ kind: 'admin', data });
+                return;
             }
-        };
-        
+
+            if (user?.role === 'teacher' && user?.id) {
+                const data = await analyticsAPI.getTeacherStats(user.id);
+                setStatsData({ kind: 'teacher', data });
+                return;
+            }
+
+            if (user?.role === 'student' && user?.id) {
+                const data = await analyticsAPI.getStudentStats(user.id);
+                setStatsData({ kind: 'student', data });
+                return;
+            }
+
+            setStatsData(null);
+        } catch (err) {
+            // Keep the dashboard usable even if stats fail to load
+            setStatsData(null);
+        } finally {
+            setStatsLoading(false);
+        }
+    }, [user?.id, user?.role]);
+
+    useEffect(() => {
         fetchDashboardStats();
-    }, [userListRefresh]); // Re-fetch when users are added/deleted
+    }, [fetchDashboardStats, statsRefresh]);
+
+    // Refresh stats whenever user navigates back to Dashboard
+    useEffect(() => {
+        if (activeTab === 'Dashboard') {
+            setStatsRefresh(prev => prev + 1);
+        }
+    }, [activeTab]);
 
     // Calculate dynamic stats from real user data
     const dynamicStats = useMemo(() => {
-        const totalStudents = allUsers.filter(u => u.role === 'student').length;
-        const totalTeachers = allUsers.filter(u => u.role === 'teacher').length;
-        const totalUsers = allUsers.length;
+        if (statsData?.kind === 'admin' && statsData?.data) {
+            const s = statsData.data;
 
+            return [
+                {
+                    title: "Total Quizzes Held",
+                    value: String(s.total_quizzes ?? 0),
+                    icon: FileText,
+                    color: "bg-blue-100/50 text-blue-800",
+                    subtitle: `${s.active_quizzes ?? 0} active`,
+                    trend: "Updated",
+                },
+                {
+                    title: "Total Students",
+                    value: String(s.total_students ?? 0),
+                    icon: UserCheck,
+                    color: "bg-indigo-100/50 text-indigo-800",
+                    subtitle: `${s.active_students ?? 0} active`,
+                    trend: "Updated",
+                },
+                {
+                    title: "Total Teachers",
+                    value: String(s.total_teachers ?? 0),
+                    icon: Users,
+                    color: "bg-green-100/50 text-green-800",
+                    subtitle: `${s.active_teachers ?? 0} active`,
+                    trend: "Updated",
+                },
+                {
+                    title: "Total Attempts",
+                    value: String(s.total_attempts ?? 0),
+                    icon: Trophy,
+                    color: "bg-yellow-100/50 text-yellow-800",
+                    subtitle: `${s.yesterday_assessments ?? 0} yesterday`,
+                    trend: "Updated",
+                },
+            ];
+        }
+
+        if (statsData?.kind === 'teacher' && statsData?.data) {
+            const s = statsData.data;
+            const avg = s.average_quiz_score;
+            const avgLabel = avg === null || avg === undefined ? 'N/A' : `${avg}%`;
+
+            return [
+                {
+                    title: "Quizzes Created",
+                    value: String(s.total_quizzes_created ?? 0),
+                    icon: FileText,
+                    color: "bg-blue-100/50 text-blue-800",
+                    subtitle: `${s.active_quizzes ?? 0} active`,
+                    trend: "Updated",
+                },
+                {
+                    title: "Students Attempted",
+                    value: String(s.students_attempted ?? 0),
+                    icon: Users,
+                    color: "bg-indigo-100/50 text-indigo-800",
+                    subtitle: "Unique students", 
+                    trend: "Updated",
+                },
+                {
+                    title: "Average Score",
+                    value: avgLabel,
+                    icon: TrendingUp,
+                    color: "bg-green-100/50 text-green-800",
+                    subtitle: "Completed attempts",
+                    trend: "Updated",
+                },
+                {
+                    title: "Questions Authored",
+                    value: String(s.total_questions_authored ?? 0),
+                    icon: ClipboardList,
+                    color: "bg-yellow-100/50 text-yellow-800",
+                    subtitle: `${s.subjects_taught ?? 0} subjects taught`,
+                    trend: "Updated",
+                },
+            ];
+        }
+
+        if (statsData?.kind === 'student' && statsData?.data) {
+            const s = statsData.data;
+            const avgLabel = s.average_percentage === null || s.average_percentage === undefined
+                ? 'N/A'
+                : `${s.average_percentage}%`;
+
+            return [
+                {
+                    title: "Quizzes Attempted",
+                    value: String(s.total_quizzes_attempted ?? 0),
+                    icon: FileText,
+                    color: "bg-blue-100/50 text-blue-800",
+                    subtitle: `${s.quizzes_completed ?? 0} completed`,
+                    trend: "Updated",
+                },
+                {
+                    title: "Average",
+                    value: avgLabel,
+                    icon: TrendingUp,
+                    color: "bg-green-100/50 text-green-800",
+                    subtitle: "Completed attempts",
+                    trend: "Updated",
+                },
+                {
+                    title: "Highest Score",
+                    value: String(s.highest_score ?? 'N/A'),
+                    icon: Trophy,
+                    color: "bg-indigo-100/50 text-indigo-800",
+                    subtitle: "Best attempt",
+                    trend: "Updated",
+                },
+                {
+                    title: "Pending Quizzes",
+                    value: String(s.pending_quizzes ?? 0),
+                    icon: Clock,
+                    color: "bg-yellow-100/50 text-yellow-800",
+                    subtitle: "Not attempted yet",
+                    trend: "Updated",
+                },
+            ];
+        }
+
+        // Fallback cards (e.g., not logged in yet)
         return [
-            { 
-                title: "Total Quizzes Held", 
-                value: "0", 
-                icon: FileText, 
-                color: "bg-blue-100/50 text-blue-800", 
-                subtitle: "No quizzes created yet", 
-                trend: "N/A" 
+            {
+                title: "Total Quizzes Held",
+                value: "0",
+                icon: FileText,
+                color: "bg-blue-100/50 text-blue-800",
+                subtitle: "Stats unavailable",
+                trend: "N/A",
             },
-            { 
-                title: "Total Students", 
-                value: totalStudents.toString(), 
-                icon: UserCheck, 
-                color: "bg-indigo-100/50 text-indigo-800", 
-                subtitle: `${totalStudents} student${totalStudents !== 1 ? 's' : ''} registered`, 
-                trend: totalStudents > 0 ? `+${totalStudents}` : "N/A"
+            {
+                title: "Total Students",
+                value: "0",
+                icon: UserCheck,
+                color: "bg-indigo-100/50 text-indigo-800",
+                subtitle: "Stats unavailable",
+                trend: "N/A",
             },
-            { 
-                title: "Total Teachers", 
-                value: totalTeachers.toString(), 
-                icon: Users, 
-                color: "bg-green-100/50 text-green-800", 
-                subtitle: `${totalTeachers} teacher${totalTeachers !== 1 ? 's' : ''} registered`, 
-                trend: totalTeachers > 0 ? `+${totalTeachers}` : "N/A"
+            {
+                title: "Total Teachers",
+                value: "0",
+                icon: Users,
+                color: "bg-green-100/50 text-green-800",
+                subtitle: "Stats unavailable",
+                trend: "N/A",
             },
-            { 
-                title: "Total Users", 
-                value: totalUsers.toString(), 
-                icon: Zap, 
-                color: "bg-yellow-100/50 text-yellow-800", 
-                subtitle: `${totalUsers} user${totalUsers !== 1 ? 's' : ''} in system`, 
-                trend: totalUsers > 0 ? `+${totalUsers}` : "N/A"
+            {
+                title: "Total Attempts",
+                value: "0",
+                icon: Trophy,
+                color: "bg-yellow-100/50 text-yellow-800",
+                subtitle: "Stats unavailable",
+                trend: "N/A",
             },
         ];
-    }, [allUsers]);
+    }, [statsData]);
 
     const handleLogout = () => {
         if (window.confirm('Are you sure you want to logout?')) {
@@ -3282,6 +3414,7 @@ export default function AdminDashboard() {
     // Handler when user is created successfully
     const handleUserCreated = () => {
         setUserListRefresh(prev => prev + 1); // Trigger refresh
+        setStatsRefresh(prev => prev + 1);
     };
 
     // Role-based navigation

@@ -243,9 +243,28 @@ async def get_quiz(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Quiz not found"
         )
+
+    # Never allow students to request answers
+    if include_answers and current_user.role not in ["admin", "teacher"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view correct answers"
+        )
     
     # Check permissions
     if current_user.role == "student":
+        # Students can only access quizzes assigned to them
+        from app.models.models import QuizAssignment
+        assignment = db.query(QuizAssignment).filter(
+            QuizAssignment.quiz_id == quiz.id,
+            QuizAssignment.student_id == current_user.id,
+        ).first()
+        if not assignment:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Quiz not assigned to you"
+            )
+
         if not quiz.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -293,8 +312,8 @@ async def get_quiz(
                     detail="Quiz grace period expired. Cannot start now."
                 )
     
-    # Return quiz with answers included for teachers/admins or when explicitly requested
-    if current_user.role in ["admin", "teacher"] or include_answers:
+    # Return quiz with answers included for teachers/admins
+    if current_user.role in ["admin", "teacher"]:
         # Build response manually to include correct_answer field
         questions_with_answers = []
         for q in quiz.questions:
@@ -392,6 +411,19 @@ async def check_quiz_eligibility(
     
     # Teachers and admins can always preview quizzes (bypass all restrictions)
     is_teacher_or_admin = current_user.role in ["teacher", "admin"]
+
+    # Students can only check eligibility for quizzes assigned to them
+    if current_user.role == "student":
+        from app.models.models import QuizAssignment
+        assignment = db.query(QuizAssignment).filter(
+            QuizAssignment.quiz_id == quiz.id,
+            QuizAssignment.student_id == current_user.id,
+        ).first()
+        if not assignment:
+            return {
+                "eligible": False,
+                "reason": "Quiz not assigned to you"
+            }
     
     if not quiz.is_active and not is_teacher_or_admin:
         return {
@@ -399,19 +431,7 @@ async def check_quiz_eligibility(
             "reason": "Quiz is not active"
         }
     
-    # Check if already completed this quiz (only for students)
-    if not is_teacher_or_admin:
-        completed_attempt = db.query(QuizAttempt).filter(
-            QuizAttempt.quiz_id == quiz_id,
-            QuizAttempt.student_id == current_user.id,
-            QuizAttempt.is_completed == True
-        ).first()
-        
-        if completed_attempt:
-            return {
-                "eligible": False,
-                "reason": "Already completed this quiz"
-            }
+    # Retakes are allowed; do not block eligibility for completed attempts.
     
     # Check if there's an active (incomplete) attempt
     active_attempt = db.query(QuizAttempt).filter(

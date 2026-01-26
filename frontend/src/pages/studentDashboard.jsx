@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -26,12 +26,7 @@ const StudentDashboard = () => {
         bestScore: 0
     });
 
-    // Fetch student's quizzes and attempts
-    useEffect(() => {
-        fetchDashboardData();
-    }, [refreshTrigger]);
-
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         setIsLoading(true);
         try {
             // Fetch available quizzes (only active ones for students)
@@ -70,12 +65,23 @@ const StudentDashboard = () => {
                     console.log('📊 Calculated stats:', calculatedStats);
                     setStats(calculatedStats);
                 } else {
-                    console.log('📊 No attempts data found, keeping default stats');
+                    setStats({
+                        totalAttempts: 0,
+                        averageScore: 0,
+                        quizzesTaken: 0,
+                        bestScore: 0
+                    });
                 }
             } catch (attemptErr) {
                 console.error('❌ Failed to fetch attempts:', attemptErr);
                 console.error('Error details:', attemptErr.status, attemptErr.data);
                 setAttempts([]);
+                setStats({
+                    totalAttempts: 0,
+                    averageScore: 0,
+                    quizzesTaken: 0,
+                    bestScore: 0
+                });
             }
         } catch (err) {
             // Show specific error for network issues
@@ -87,7 +93,26 @@ const StudentDashboard = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [error]);
+
+    // Fetch student's quizzes and attempts
+    useEffect(() => {
+        fetchDashboardData();
+    }, [fetchDashboardData, refreshTrigger]);
+
+    // Refresh when switching tabs where data is displayed
+    useEffect(() => {
+        if (activeTab === 'Dashboard' || activeTab === 'Available Quizzes' || activeTab === 'My Progress') {
+            setRefreshTrigger(prev => prev + 1);
+        }
+    }, [activeTab]);
+
+    // Refresh when the user comes back to the tab/window
+    useEffect(() => {
+        const onFocus = () => setRefreshTrigger(prev => prev + 1);
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, []);
 
     const handleLogout = () => {
         if (window.confirm('Are you sure you want to logout?')) {
@@ -349,9 +374,19 @@ const StudentDashboard = () => {
             case 'My Progress':
                 return (
                     <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-                        <h2 className="text-xl font-semibold text-gray-800 border-b pb-4 mb-4">
-                            My Quiz History
-                        </h2>
+                        <div className="flex justify-between items-center border-b pb-4 mb-4">
+                            <h2 className="text-xl font-semibold text-gray-800">
+                                My Quiz History
+                            </h2>
+                            <button
+                                onClick={() => setRefreshTrigger(prev => prev + 1)}
+                                className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
+                                title="Refresh attempts"
+                            >
+                                <RefreshCw size={18} className="mr-2" />
+                                Refresh
+                            </button>
+                        </div>
                         {attempts.length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full">

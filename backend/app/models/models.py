@@ -214,3 +214,30 @@ class QuizAssignment(Base):
     # Relationships
     quiz = relationship("Quiz", backref="assignments")
     student = relationship("User", backref="assigned_quizzes")
+
+
+# --- SESSION MANAGEMENT TABLES ---
+
+class RevokedToken(Base):
+    """Stores revoked JWT ids (jti) until they expire."""
+
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String(64), unique=True, index=True, nullable=False)
+    subject = Column(String(EMAIL_LENGTH), index=True, nullable=True)  # usually email
+    revoked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class UserTokenBlock(Base):
+    """Global invalidation marker for a user.
+
+    Any token with iat < revoked_before is rejected.
+    """
+
+    __tablename__ = "user_token_blocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    revoked_before = Column(DateTime, default=datetime.utcnow, nullable=False)

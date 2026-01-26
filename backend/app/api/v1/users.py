@@ -79,6 +79,11 @@ async def bulk_upload_users(
     
     try:
         contents = await file.read()
+        if len(contents) > 5 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File too large (max 5MB)"
+            )
         
         # Handle CSV files
         if file.filename.endswith('.csv'):
@@ -109,6 +114,19 @@ async def bulk_upload_users(
                     continue
                 
                 role = row['role'].strip().lower()
+                if role not in {"admin", "teacher", "student"}:
+                    errors.append({
+                        "row": row_num,
+                        "error": "Invalid role (must be admin, teacher, or student)"
+                    })
+                    continue
+
+                if current_user.role == "teacher" and role != "student":
+                    errors.append({
+                        "row": row_num,
+                        "error": "Teachers can only bulk-upload students"
+                    })
+                    continue
                 email = row['email'].strip()
                 
                 # Check if email already exists
@@ -164,7 +182,7 @@ async def bulk_upload_users(
             except Exception as e:
                 errors.append({
                     "row": row_num,
-                    "error": str(e)
+                    "error": "Invalid row data"
                 })
         
         # Commit all users at once
@@ -182,7 +200,7 @@ async def bulk_upload_users(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process file: {str(e)}"
+            detail="Failed to process file"
         )
 
 @router.get("/", response_model=List[UserResponse], dependencies=[Depends(require_role(["admin", "teacher"]))])
@@ -238,9 +256,25 @@ async def update_user(
             detail="User not found"
         )
     
-    update_data = user_data.dict(exclude_unset=True)
+    update_data = user_data.model_dump(exclude_unset=True)
+
+    # Handle password updates safely
+    new_password = update_data.pop("password", None)
+    if new_password:
+        user.hashed_password = get_password_hash(new_password)
+
+    # Only allow a safe subset of fields to be updated
+    allowed_fields = {
+        "first_name",
+        "last_name",
+        "department",
+        "class_year",
+        "phone_number",
+        "is_active",
+    }
     for field, value in update_data.items():
-        setattr(user, field, value)
+        if field in allowed_fields:
+            setattr(user, field, value)
     
     db.commit()
     db.refresh(user)
@@ -280,7 +314,8 @@ async def get_teacher_activity(
             "department": teacher.department,
             "class_year": teacher.class_year,
             "student_id": teacher.student_id,
-            "last_active": teacher.last_active
+            "last_active": teacher.last_active,
+            "is_active": teacher.is_active,
         }
         for teacher in teachers
     ]
@@ -300,7 +335,8 @@ async def get_student_activity(
             "department": student.department,
             "class_year": student.class_year,
             "student_id": student.student_id,
-            "last_active": student.last_active
+            "last_active": student.last_active,
+            "is_active": student.is_active,
         }
         for student in students
     ]

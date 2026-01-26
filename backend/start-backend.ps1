@@ -17,4 +17,13 @@ Write-Host "  - API Docs: http://localhost:8000/docs" -ForegroundColor Yellow
 Write-Host ""
 
 # Start uvicorn with all network interfaces (without reload to prevent shutdowns)
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+$pythonExe = $null
+if (Test-Path ".\\venv312\\Scripts\\python.exe") {
+	$pythonExe = ".\\venv312\\Scripts\\python.exe"
+} elseif (Test-Path ".\\venv\\Scripts\\python.exe") {
+	$pythonExe = ".\\venv\\Scripts\\python.exe"
+} else {
+	$pythonExe = "python"
+}
+
+& $pythonExe -m uvicorn app.main:app --host 0.0.0.0 --port 8000

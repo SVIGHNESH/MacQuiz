@@ -32,6 +32,19 @@ async def start_quiz_attempt(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Quiz not found"
         )
+
+    # Students can only start attempts for quizzes assigned to them
+    if current_user.role == "student":
+        from app.models.models import QuizAssignment
+        assignment = db.query(QuizAssignment).filter(
+            QuizAssignment.quiz_id == quiz.id,
+            QuizAssignment.student_id == current_user.id,
+        ).first()
+        if not assignment:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Quiz not assigned to you"
+            )
     
     # Teachers and admins can preview anytime (bypass restrictions)
     is_teacher_or_admin = current_user.role in ["teacher", "admin"]
@@ -203,6 +216,9 @@ async def submit_quiz_attempt(
     total_score = 0
     correct_count = 0
     incorrect_count = 0
+
+    # Remove any previously autosaved answers for this attempt to avoid duplicates
+    db.query(Answer).filter(Answer.attempt_id == attempt.id).delete(synchronize_session=False)
     
     # If no answers provided, still mark as completed with 0 score
     if not submission.answers or len(submission.answers) == 0:
@@ -546,6 +562,11 @@ async def get_all_attempts(
 ):
     """Get all quiz attempts with enhanced details for teachers/admins"""
     query = db.query(QuizAttempt)
+
+    # Teachers can only see attempts for their own quizzes
+    if current_user.role == "teacher":
+        query = query.join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        query = query.filter(Quiz.creator_id == current_user.id)
     
     # Apply filters
     if completed_only:
@@ -608,6 +629,15 @@ async def get_quiz_attempts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Teachers can only view attempts for quizzes they created
+    if current_user.role == "teacher":
+        quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+        if not quiz or quiz.creator_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view attempts for this quiz"
+            )
+
     attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).all()
     return attempts
 
