@@ -28,7 +28,7 @@ export default function App() {
                 </ProtectedRoute>
               } 
             />
-            {/* Legacy route for backward compatibility */}
+            {/* Legacy alias to unified dashboard route */}
             <Route 
               path="/student-dashboard" 
               element={

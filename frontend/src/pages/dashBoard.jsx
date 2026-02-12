@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -11,7 +11,7 @@ import QuizCreator from "./QuizCreator";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
-    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award, ChevronDown
 } from 'lucide-react';
 
 // No mock data needed - all data fetched from API
@@ -2489,9 +2489,10 @@ const AdminQuizMonitoring = () => {
 };
 
 // Settings Component
-const SettingsComponent = () => {
+const SettingsComponent = ({ currentUserRole }) => {
     const { success, error } = useToast();
     const [activeSection, setActiveSection] = useState('departments');
+    const canManageSettings = currentUserRole === 'admin' || currentUserRole === 'teacher';
     
     // Load from localStorage or use defaults
     const [departments, setDepartments] = useState(() => {
@@ -2535,6 +2536,10 @@ const SettingsComponent = () => {
     });
 
     const handleAddDepartment = () => {
+        if (!canManageSettings) {
+            error('You do not have permission to modify settings');
+            return;
+        }
         if (!newDepartment.trim()) {
             error('Please enter a department name');
             return;
@@ -2551,6 +2556,10 @@ const SettingsComponent = () => {
     };
 
     const handleRemoveDepartment = (dept) => {
+        if (!canManageSettings) {
+            error('You do not have permission to modify settings');
+            return;
+        }
         const updated = departments.filter(d => d !== dept);
         setDepartments(updated);
         localStorage.setItem('quiz_departments', JSON.stringify(updated));
@@ -2558,6 +2567,10 @@ const SettingsComponent = () => {
     };
 
     const handleSaveGradingScale = () => {
+        if (!canManageSettings) {
+            error('You do not have permission to modify settings');
+            return;
+        }
         // Validate grading scale
         const sorted = [...gradingScale].sort((a, b) => b.minPercentage - a.minPercentage);
         let valid = true;
@@ -2579,6 +2592,10 @@ const SettingsComponent = () => {
     };
 
     const handleSavePlatformSettings = () => {
+        if (!canManageSettings) {
+            error('You do not have permission to modify settings');
+            return;
+        }
         if (platformSettings.defaultQuizDuration < 1) {
             error('Quiz duration must be at least 1 minute');
             return;
@@ -2590,6 +2607,15 @@ const SettingsComponent = () => {
         localStorage.setItem('quiz_platform_settings', JSON.stringify(platformSettings));
         success('Platform settings saved successfully');
     };
+
+    if (!canManageSettings) {
+        return (
+            <div className="bg-white p-10 rounded-2xl shadow-lg border border-gray-100 text-center">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Restricted</h2>
+                <p className="text-gray-600">You do not have permission to view or modify settings.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -3328,6 +3354,156 @@ const StudentResultsView = () => {
     );
 };
 
+const StudentUnifiedView = ({ activeTab, user }) => {
+    const navigate = useNavigate();
+    const { error } = useToast();
+    const [quizzes, setQuizzes] = useState([]);
+    const [attempts, setAttempts] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const [quizzesData, attemptsData] = await Promise.all([
+                quizAPI.getAllQuizzes().catch(() => []),
+                attemptAPI.getMyAttempts().catch(() => []),
+            ]);
+
+            const activeQuizzes = Array.isArray(quizzesData)
+                ? quizzesData.filter((quiz) => quiz && quiz.is_active === true)
+                : [];
+
+            setQuizzes(activeQuizzes);
+            setAttempts(Array.isArray(attemptsData) ? attemptsData : []);
+        } catch (err) {
+            error(err?.data?.detail || err?.message || 'Failed to load student data');
+            setQuizzes([]);
+            setAttempts([]);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [error]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const QuizCard = ({ quiz }) => (
+        <div className="bg-white p-5 rounded-xl border border-gray-200 hover:shadow-md transition">
+            <div className="flex justify-between items-start gap-3">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-900">{quiz.title || 'Untitled Quiz'}</h3>
+                    <p className="text-sm text-gray-600 mt-1">{quiz.description || 'No description available'}</p>
+                    <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                        <span className="flex items-center"><FileText size={15} className="mr-1" />{quiz.total_questions || 0} Qs</span>
+                        <span className="flex items-center"><Clock size={15} className="mr-1" />{quiz.duration_minutes || 30} mins</span>
+                        <span className="flex items-center"><Trophy size={15} className="mr-1" />{quiz.total_marks || 0} marks</span>
+                    </div>
+                </div>
+                <button
+                    onClick={() => navigate(`/quiz/${quiz.id}/take`)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                    Start
+                </button>
+            </div>
+        </div>
+    );
+
+    if (activeTab === 'Profile') {
+        return (
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">My Profile</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
+                    <div><span className="text-gray-500">Name:</span> {user?.first_name} {user?.last_name}</div>
+                    <div><span className="text-gray-500">Email:</span> {user?.email}</div>
+                    <div><span className="text-gray-500">Student ID:</span> {user?.student_id || 'N/A'}</div>
+                    <div><span className="text-gray-500">Class:</span> {user?.class_year || 'N/A'}</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (activeTab === 'My Progress') {
+        return (
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">My Progress</h2>
+                {isLoading ? (
+                    <p className="text-gray-500">Loading progress...</p>
+                ) : attempts.length === 0 ? (
+                    <p className="text-gray-500">No attempts yet.</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-gray-50 border-b">
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Quiz</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Score</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Grade</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {attempts.map((attempt) => {
+                                    const percentage = attempt.percentage || 0;
+                                    const grade = getGradeFromPercentage(percentage);
+                                    return (
+                                        <tr key={attempt.id} className="border-b hover:bg-gray-50">
+                                            <td className="px-4 py-3 text-sm text-gray-800">{attempt.quiz_title || `Quiz ${attempt.quiz_id}`}</td>
+                                            <td className="px-4 py-3 text-sm font-semibold text-gray-900">{percentage.toFixed(1)}%</td>
+                                            <td className="px-4 py-3 text-sm"><span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{grade}</span></td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">{attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'Not submitted'}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    if (activeTab === 'My Quizzes') {
+        return (
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 space-y-4">
+                <h2 className="text-2xl font-bold text-gray-900">My Quizzes</h2>
+                {isLoading ? <p className="text-gray-500">Loading quizzes...</p> : quizzes.length > 0 ? quizzes.map((quiz) => <QuizCard key={quiz.id} quiz={quiz} />) : <p className="text-gray-500">No quizzes available right now.</p>}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-white p-5 rounded-xl shadow border border-gray-100">
+                    <p className="text-sm text-gray-600">Total Attempts</p>
+                    <p className="text-3xl font-bold text-blue-600">{attempts.length}</p>
+                </div>
+                <div className="bg-white p-5 rounded-xl shadow border border-gray-100">
+                    <p className="text-sm text-gray-600">Average Score</p>
+                    <p className="text-3xl font-bold text-green-600">
+                        {attempts.length ? (attempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / attempts.length).toFixed(1) : '0.0'}%
+                    </p>
+                </div>
+                <div className="bg-white p-5 rounded-xl shadow border border-gray-100">
+                    <p className="text-sm text-gray-600">Available Quizzes</p>
+                    <p className="text-3xl font-bold text-purple-600">{quizzes.length}</p>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 space-y-4">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-900">Quick Start</h2>
+                    <button onClick={fetchData} className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition">Refresh</button>
+                </div>
+                {isLoading ? <p className="text-gray-500">Loading quizzes...</p> : quizzes.slice(0, 3).map((quiz) => <QuizCard key={quiz.id} quiz={quiz} />)}
+                {!isLoading && quizzes.length === 0 && <p className="text-gray-500">No quizzes available right now.</p>}
+            </div>
+        </div>
+    );
+};
+
 
 /**
  * --- MAIN APPLICATION COMPONENT (Admin Dashboard) ---
@@ -3336,6 +3512,12 @@ export default function AdminDashboard() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
     const { success } = useToast();
+
+    const roleLabel = user?.role === 'teacher' ? 'Teacher' : user?.role === 'student' ? 'Student' : 'Administrator';
+    const portalLabel = user?.role === 'teacher' ? 'Teacher Portal' : user?.role === 'student' ? 'Student Portal' : 'Admin';
+    const userInitials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase() || 'U';
+    const identityLabel = user?.role === 'student' ? 'Student ID' : user?.role === 'teacher' ? 'Teacher ID' : 'Admin ID';
+    const identityValue = user?.role === 'student' ? (user?.student_id || user?.id || 'N/A') : (user?.id || 'N/A');
     
     // userViewMode can be 'list' (show table) or 'add' (show form)
     const [activeTab, setActiveTab] = useState('Dashboard');
@@ -3344,6 +3526,8 @@ export default function AdminDashboard() {
     const [statsLoading, setStatsLoading] = useState(true);
     const [statsRefresh, setStatsRefresh] = useState(0);
     const [statsData, setStatsData] = useState(null);
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const profileMenuRef = useRef(null);
 
     const fetchDashboardStats = useCallback(async () => {
         setStatsLoading(true);
@@ -3385,6 +3569,27 @@ export default function AdminDashboard() {
             setStatsRefresh(prev => prev + 1);
         }
     }, [activeTab]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+                setIsProfileMenuOpen(false);
+            }
+        };
+
+        const handleEscape = (event) => {
+            if (event.key === 'Escape') {
+                setIsProfileMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, []);
 
     // Calculate dynamic stats from real user data
     const dynamicStats = useMemo(() => {
@@ -3569,6 +3774,12 @@ export default function AdminDashboard() {
         { name: "Student Results", icon: Trophy, title: "Student Results" },
         { name: "SDC Team", icon: Code2, title: "SDC Team" },
         { name: "Settings", icon: Settings, title: "Settings" },
+    ] : user?.role === 'student' ? [
+        { name: "Dashboard", icon: LayoutDashboard, title: "Dashboard" },
+        { name: "My Quizzes", icon: FileText, title: "My Quizzes" },
+        { name: "My Progress", icon: Trophy, title: "My Progress" },
+        { name: "Profile", icon: Users, title: "Profile" },
+        { name: "SDC Team", icon: Code2, title: "SDC Team" },
     ] : [
         { name: "Dashboard", icon: LayoutDashboard, title: "Dashboard" },
         { name: "Users", icon: Users, title: "User Management", onClick: () => setUserViewMode('list') },
@@ -3598,6 +3809,9 @@ export default function AdminDashboard() {
     const renderContent = () => {
         switch (activeTab) {
             case 'Dashboard': { // Added braces to fix no-case-declarations
+                if (user?.role === 'student') {
+                    return <StudentUnifiedView activeTab="Dashboard" user={user} />;
+                }
                 return (
                     <div className="space-y-8">
                         {/* 4 Block Metrics (Colors reverted) */}
@@ -3671,6 +3885,18 @@ export default function AdminDashboard() {
                             <AdminQuizMonitoring />
                         </TabErrorBoundary>
                     );
+            case 'My Quizzes':
+                return user?.role === 'student'
+                    ? <StudentUnifiedView activeTab="My Quizzes" user={user} />
+                    : <Placeholder content="Page Not Found" />;
+            case 'My Progress':
+                return user?.role === 'student'
+                    ? <StudentUnifiedView activeTab="My Progress" user={user} />
+                    : <Placeholder content="Page Not Found" />;
+            case 'Profile':
+                return user?.role === 'student'
+                    ? <StudentUnifiedView activeTab="Profile" user={user} />
+                    : <Placeholder content="Page Not Found" />;
             case 'Student Results':
                 return <StudentResultsView />;
             case 'Detailed Reports':
@@ -3678,7 +3904,9 @@ export default function AdminDashboard() {
             case 'SDC Team':
                 return <SdcTeamSection />;
             case 'Settings':
-                return <SettingsComponent />;
+                return user?.role === 'student'
+                    ? <Placeholder content="You do not have access to Settings." />
+                    : <SettingsComponent currentUserRole={user?.role} />;
             default:
                 return <Placeholder content="Page Not Found" />;
         }
@@ -3703,7 +3931,7 @@ export default function AdminDashboard() {
                         MacQuiz
                     </button>
                     <span className="text-sm text-gray-500">
-                        {user?.role === 'teacher' ? 'Teacher' : 'Admin'}
+                        {roleLabel}
                     </span>
                 </div>
                 <button
@@ -3718,7 +3946,7 @@ export default function AdminDashboard() {
             <aside className="hidden lg:flex w-64 flex-col fixed inset-y-0 bg-white border-r shadow-lg z-20">
                 <div className="p-6 text-2xl font-extrabold text-blue-700 border-b">
                     MacQuiz <span className="text-gray-400 font-light">
-                        {user?.role === 'teacher' ? 'Teacher Portal' : 'Admin'}
+                        {portalLabel}
                     </span>
                 </div>
                 <nav className="flex-1 p-4 flex flex-col min-h-0">
@@ -3756,26 +3984,50 @@ export default function AdminDashboard() {
                             {getCurrentTitle()}
                         </h1>
                         <p className="text-gray-500 mt-1">
-                            {activeTab === 'Dashboard' ? "System overview and quick access actions." : "Detailed views and management tools."}
+                            {activeTab === 'Dashboard'
+                                ? (user?.role === 'student' ? "Your quizzes and progress overview." : "System overview and quick access actions.")
+                                : "Detailed views and management tools."}
                         </p>
                     </div>
 
-                    {/* Top Right Controls - Hidden on mobile, shown on desktop */}
-                    <div className="hidden sm:flex flex-col items-end gap-3">
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center px-4 py-2 rounded-xl transition duration-150 text-red-500 hover:bg-red-50 border border-red-100"
-                        >
-                            <LogOut size={18} className="mr-2" />
-                            <span className="font-medium">Logout</span>
-                        </button>
+                    {/* Profile Dropdown - Hidden on mobile, shown on desktop */}
+                    <div className="hidden sm:flex items-start" ref={profileMenuRef}>
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsProfileMenuOpen(prev => !prev)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition duration-150 border border-gray-200"
+                            >
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md">
+                                    {userInitials}
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs sm:text-sm font-semibold text-gray-800">{roleLabel}</p>
+                                    <p className="text-xs text-gray-500">{identityLabel}: {identityValue}</p>
+                                </div>
+                                <ChevronDown
+                                    size={16}
+                                    className={`text-gray-500 transition-transform duration-150 ${isProfileMenuOpen ? 'rotate-180' : ''}`}
+                                />
+                            </button>
 
-                        <div className="flex flex-col items-end space-y-1">
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md cursor-pointer hover:ring-4 ring-blue-300 transition duration-150">
-                                AD
-                            </div>
-                            <p className="text-xs sm:text-sm font-semibold text-gray-800">Administrator</p>
-                            <p className="text-xs text-gray-500">Admin ID: 001</p>
+                            {isProfileMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden origin-top-right transform transition-all duration-200 ease-out opacity-100 scale-100 translate-y-0 animate-[fadeIn_0.18s_ease-out]">
+                                    <div className="px-4 py-3 border-b bg-gray-50">
+                                        <p className="text-sm font-semibold text-gray-900">{user?.first_name} {user?.last_name}</p>
+                                        <p className="text-xs text-gray-500">{user?.email}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setIsProfileMenuOpen(false);
+                                            handleLogout();
+                                        }}
+                                        className="w-full flex items-center px-4 py-3 text-red-600 hover:bg-red-50 transition text-sm font-medium"
+                                    >
+                                        <LogOut size={16} className="mr-2" />
+                                        Logout
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </header>

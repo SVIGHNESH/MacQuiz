@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from './dashBoard';
-import StudentDashboard from './studentDashboard';
 
 /**
  * Global Dashboard Component
  * Automatically renders the appropriate dashboard based on user role
- * - Admin/Teacher: Admin Dashboard with full management capabilities
- * - Student: Student Dashboard with quiz taking and progress tracking
+ * - All roles: Shared unified dashboard shell with role-based tabs and permissions
  */
 const GlobalDashboard = () => {
     const { user, isLoading } = useAuth();
@@ -83,10 +81,8 @@ const GlobalDashboard = () => {
         switch (userRole) {
             case 'admin':
             case 'teacher':
-                return <AdminDashboard />;
-            
             case 'student':
-                return <StudentDashboard />;
+                return <AdminDashboard />;
             
             default:
                 return (
