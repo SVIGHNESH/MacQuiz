@@ -7,7 +7,7 @@ import {
     FileText, Clock, Award, AlertCircle, CheckCircle
 } from 'lucide-react';
 
-const QuizCreator = () => {
+const QuizCreator = ({ embedded = false, onDone }) => {
     const navigate = useNavigate();
     const { quizId } = useParams();
     const { success, error } = useToast();
@@ -235,7 +235,11 @@ const QuizCreator = () => {
                 await quizAPI.createQuiz(payload);
                 success('Quiz created successfully!');
             }
-            navigate('/dashboard');
+            if (onDone) {
+                onDone();
+            } else {
+                navigate('/dashboard');
+            }
         } catch (err) {
             console.error('Quiz creation error:', err);
             console.error('Error details:', err.data);
@@ -259,7 +263,7 @@ const QuizCreator = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-8">
+        <div className={`${embedded ? '' : 'min-h-screen'} bg-gradient-to-br from-blue-50 to-indigo-50 py-8`}>
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header */}
                 <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">

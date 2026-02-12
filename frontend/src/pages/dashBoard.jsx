@@ -7,6 +7,7 @@ import { getDepartments } from "../utils/settingsHelper";
 import BulkUploadModal from "../components/BulkUploadModal";
 import BulkQuizUploadModal from "../components/BulkQuizUploadModal";
 import QuizAssignmentModal from "../components/QuizAssignmentModal";
+import QuizCreator from "./QuizCreator";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
@@ -1965,6 +1966,7 @@ const TeacherQuizManagement = () => {
     const [showBulkUpload, setShowBulkUpload] = useState(false);
     const [assignQuizModal, setAssignQuizModal] = useState({ open: false, quiz: null });
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [showCreateQuizInline, setShowCreateQuizInline] = useState(false);
 
     useEffect(() => {
         fetchQuizzes();
@@ -2035,6 +2037,26 @@ const TeacherQuizManagement = () => {
         setRefreshTrigger(prev => prev + 1);
     };
 
+    if (showCreateQuizInline) {
+        return (
+            <div className="space-y-4">
+                <button
+                    onClick={() => setShowCreateQuizInline(false)}
+                    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition"
+                >
+                    ← Back to Quiz Management
+                </button>
+                <QuizCreator
+                    embedded
+                    onDone={() => {
+                        setShowCreateQuizInline(false);
+                        setRefreshTrigger(prev => prev + 1);
+                    }}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -2059,7 +2081,7 @@ const TeacherQuizManagement = () => {
                             Bulk Upload
                         </button>
                         <button
-                            onClick={() => navigate('/quiz/create')}
+                            onClick={() => setShowCreateQuizInline(true)}
                             className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
                         >
                             <Plus size={20} className="mr-2" />
@@ -2079,7 +2101,7 @@ const TeacherQuizManagement = () => {
                         <h3 className="text-xl font-semibold text-gray-600 mb-2">No Quizzes Yet</h3>
                         <p className="text-gray-500 mb-6">Start by creating your first quiz for students</p>
                         <button
-                            onClick={() => navigate('/quiz/create')}
+                            onClick={() => setShowCreateQuizInline(true)}
                             className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
                         >
                             <Plus size={20} className="mr-2" />
