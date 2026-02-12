@@ -3649,17 +3649,6 @@ export default function AdminDashboard() {
                             );
                         })}
                     </div>
-                    <div className="w-full pt-2 flex justify-start flex-shrink-0">
-                        <img
-                            src="/SDC%20logo.png"
-                            alt="SDC Logo"
-                            className="w-full max-w-[180px] h-auto object-contain"
-                            onError={(e) => {
-                                e.currentTarget.onerror = null;
-                                e.currentTarget.src = '/SDC logo.png';
-                            }}
-                        />
-                    </div>
                 </nav>
             </aside>
 
@@ -3721,6 +3710,18 @@ export default function AdminDashboard() {
                     ))}
                 </div>
             </nav>
+
+            <div className="fixed left-3 bottom-20 lg:bottom-4 z-40 pointer-events-none">
+                <img
+                    src="/SDC%20logo.png"
+                    alt="SDC Logo"
+                    className="w-[160px] sm:w-[180px] h-auto object-contain"
+                    onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '/SDC logo.png';
+                    }}
+                />
+            </div>
 
         </div>
     );
