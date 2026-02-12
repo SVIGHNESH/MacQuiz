@@ -812,3 +812,17 @@ async def get_attempt_review(
         "negative_marking": float(quiz.negative_marking) if quiz.negative_marking is not None else 0.0,
         "questions": items,
     }
+
+
+@router.get("/review/{attempt_id}")
+async def get_attempt_review_alias(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Alias route for attempt review download to avoid path conflicts."""
+    return await get_attempt_review(
+        attempt_id=attempt_id,
+        db=db,
+        current_user=current_user
+    )

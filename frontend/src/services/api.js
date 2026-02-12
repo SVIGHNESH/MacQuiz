@@ -223,7 +223,16 @@ export const attemptAPI = {
         return fetchAPI(url);
     },
     getAttempt: (id) => fetchAPI(`/api/v1/attempts/${id}`),
-    getAttemptReview: (id) => fetchAPI(`/api/v1/attempts/${id}/review`),
+    getAttemptReview: async (id) => {
+        try {
+            return await fetchAPI(`/api/v1/attempts/${id}/review`);
+        } catch (err) {
+            if (err?.status === 404) {
+                return await fetchAPI(`/api/v1/attempts/review/${id}`);
+            }
+            throw err;
+        }
+    },
     getRemainingTime: (attemptId) => fetchAPI(`/api/v1/attempts/${attemptId}/remaining-time`),
     startAttempt: (quizId) => fetchAPI('/api/v1/attempts/start', {
         method: 'POST',

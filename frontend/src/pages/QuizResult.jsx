@@ -302,7 +302,11 @@ const QuizResult = () => {
                     </h3>
                     <p className={`text-lg ${passed ? 'text-green-800' : 'text-red-800'}`}>
                         {passed
-                            ? `Excellent work! You scored ${percentage.toFixed(1)}% and demonstrated strong understanding of the material. Keep up the great work!`
+                            ? (grade === 'A+' || grade === 'A'
+                                ? `Excellent work! You scored ${percentage.toFixed(1)}% and demonstrated strong understanding of the material. Keep up the great work!`
+                                : grade === 'B+' || grade === 'B'
+                                    ? `Good job! You scored ${percentage.toFixed(1)}% and showed solid understanding. Keep improving!`
+                                    : `Nice effort! You passed with ${percentage.toFixed(1)}%. Keep practicing to improve your score further.`)
                             : `You scored ${percentage.toFixed(1)}%. Don't be discouraged! Review the material and try again. Practice makes perfect!`}
                     </p>
                 </div>
