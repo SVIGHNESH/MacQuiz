@@ -3535,6 +3535,7 @@ const StudentUnifiedView = ({ activeTab, user }) => {
                                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Score</th>
                                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Grade</th>
                                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Submitted</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3547,6 +3548,18 @@ const StudentUnifiedView = ({ activeTab, user }) => {
                                             <td className="px-4 py-3 text-sm font-semibold text-gray-900">{percentage.toFixed(1)}%</td>
                                             <td className="px-4 py-3 text-sm"><span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{grade}</span></td>
                                             <td className="px-4 py-3 text-sm text-gray-600">{attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'Not submitted'}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                {attempt.is_completed ? (
+                                                    <button
+                                                        onClick={() => navigate(`/quiz-result/${attempt.id}`)}
+                                                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-xs font-semibold"
+                                                    >
+                                                        View Result
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs">In Progress</span>
+                                                )}
+                                            </td>
                                         </tr>
                                     );
                                 })}

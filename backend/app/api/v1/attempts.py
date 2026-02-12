@@ -78,19 +78,18 @@ async def start_quiz_attempt(
             return existing_attempt
     
     # Check if already completed this quiz (only for students)
-    # DISABLED: Allow students to retake quizzes for practice
-    # if not is_teacher_or_admin:
-    #     completed_attempt = db.query(QuizAttempt).filter(
-    #         QuizAttempt.quiz_id == quiz.id,
-    #         QuizAttempt.student_id == current_user.id,
-    #         QuizAttempt.is_completed == True
-    #     ).first()
-    #     
-    #     if completed_attempt:
-    #         raise HTTPException(
-    #             status_code=status.HTTP_400_BAD_REQUEST,
-    #             detail="You have already completed this quiz"
-    #         )
+    if not is_teacher_or_admin:
+        completed_attempt = db.query(QuizAttempt).filter(
+            QuizAttempt.quiz_id == quiz.id,
+            QuizAttempt.student_id == current_user.id,
+            QuizAttempt.is_completed == True
+        ).first()
+        
+        if completed_attempt:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You have already completed this quiz. Reattempt is not allowed."
+            )
     
     # Check live session timing (only for students)
     now = datetime.now()
@@ -733,3 +732,83 @@ async def get_attempt(
     }
 
     return attempt_dict
+
+
+@router.get("/{attempt_id}/review")
+async def get_attempt_review(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get per-question review for a submitted attempt.
+
+    Returns question text, student answer, correct answer, correctness and marks.
+    """
+    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == attempt_id).first()
+
+    if not attempt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attempt not found"
+        )
+
+    # Students can only view their own attempts
+    if current_user.role == "student" and attempt.student_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this attempt"
+        )
+
+    if not attempt.is_completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attempt not submitted yet"
+        )
+
+    quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found"
+        )
+
+    questions = db.query(Question).filter(Question.quiz_id == quiz.id).order_by(Question.order.asc()).all()
+    answers = db.query(Answer).filter(Answer.attempt_id == attempt.id).all()
+    answer_map = {ans.question_id: ans for ans in answers}
+
+    items = []
+    for idx, question in enumerate(questions, start=1):
+        answer = answer_map.get(question.id)
+        student_answer = answer.answer_text if answer else ""
+        is_correct = bool(answer.is_correct) if answer else False
+        marks_awarded = float(answer.marks_awarded) if answer and answer.marks_awarded is not None else 0.0
+
+        items.append({
+            "question_number": idx,
+            "question_id": question.id,
+            "question_text": question.question_text,
+            "question_type": question.question_type,
+            "option_a": question.option_a,
+            "option_b": question.option_b,
+            "option_c": question.option_c,
+            "option_d": question.option_d,
+            "correct_answer": question.correct_answer,
+            "student_answer": student_answer,
+            "is_correct": is_correct,
+            "marks": float(question.marks) if question.marks is not None else 0.0,
+            "marks_awarded": marks_awarded,
+            "mistake": not is_correct,
+        })
+
+    return {
+        "attempt_id": attempt.id,
+        "quiz_id": quiz.id,
+        "quiz_title": quiz.title,
+        "student_id": attempt.student_id,
+        "score": float(attempt.score) if attempt.score is not None else 0.0,
+        "total_marks": float(attempt.total_marks) if attempt.total_marks is not None else 0.0,
+        "percentage": float(attempt.percentage) if attempt.percentage is not None else 0.0,
+        "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+        "negative_marking": float(quiz.negative_marking) if quiz.negative_marking is not None else 0.0,
+        "questions": items,
+    }

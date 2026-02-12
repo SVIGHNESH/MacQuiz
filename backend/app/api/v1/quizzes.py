@@ -431,8 +431,19 @@ async def check_quiz_eligibility(
             "eligible": False,
             "reason": "Quiz is not active"
         }
-    
-    # Retakes are allowed; do not block eligibility for completed attempts.
+
+    # Students cannot reattempt submitted quizzes
+    if current_user.role == "student" and not is_teacher_or_admin:
+        completed_attempt = db.query(QuizAttempt).filter(
+            QuizAttempt.quiz_id == quiz_id,
+            QuizAttempt.student_id == current_user.id,
+            QuizAttempt.is_completed == True
+        ).first()
+        if completed_attempt:
+            return {
+                "eligible": False,
+                "reason": "You have already completed this quiz. Reattempt is not allowed."
+            }
     
     # Check if there's an active (incomplete) attempt
     active_attempt = db.query(QuizAttempt).filter(

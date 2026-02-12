@@ -223,6 +223,7 @@ export const attemptAPI = {
         return fetchAPI(url);
     },
     getAttempt: (id) => fetchAPI(`/api/v1/attempts/${id}`),
+    getAttemptReview: (id) => fetchAPI(`/api/v1/attempts/${id}/review`),
     getRemainingTime: (attemptId) => fetchAPI(`/api/v1/attempts/${attemptId}/remaining-time`),
     startAttempt: (quizId) => fetchAPI('/api/v1/attempts/start', {
         method: 'POST',

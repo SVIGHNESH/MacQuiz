@@ -11,11 +11,12 @@ import {
 const QuizResult = () => {
     const { attemptId } = useParams();
     const navigate = useNavigate();
-    const { error } = useToast();
+    const { error, success } = useToast();
 
     const [result, setResult] = useState(null);
     const [quizConfig, setQuizConfig] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isDownloadingReview, setIsDownloadingReview] = useState(false);
 
     useEffect(() => {
         const fetchResult = async () => {
@@ -63,6 +64,79 @@ const QuizResult = () => {
     const negativeMarksLost = wrongAnswers > 0 ? (wrongAnswers * negativeMarkingPerWrong) : 0;
     const accuracy = totalQuestions > 0 ? ((correctAnswers / totalQuestions) * 100) : 0;
     const hasScoreAccuracyGap = Math.abs(accuracy - percentage) >= 5;
+
+    const handleDownloadAttemptReview = async () => {
+        setIsDownloadingReview(true);
+        try {
+            const review = await attemptAPI.getAttemptReview(attemptId);
+            const rows = review?.questions || [];
+
+            const headers = [
+                'Question No.',
+                'Question',
+                'Question Type',
+                'Student Answer',
+                'Correct Answer',
+                'Is Correct',
+                'Marks',
+                'Marks Awarded',
+                'Mistake'
+            ];
+
+            const escapeCSV = (value) => {
+                if (value === null || value === undefined) return '';
+                const stringValue = String(value);
+                if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+                    return `"${stringValue.replace(/"/g, '""')}"`;
+                }
+                return stringValue;
+            };
+
+            const csvRows = rows.map((item) => [
+                item.question_number,
+                item.question_text,
+                item.question_type,
+                item.student_answer || 'Not Answered',
+                item.correct_answer,
+                item.is_correct ? 'Yes' : 'No',
+                item.marks,
+                item.marks_awarded,
+                item.mistake ? 'Yes' : 'No'
+            ]);
+
+            const metadataRows = [
+                ['Quiz Title', review.quiz_title || 'Quiz'],
+                ['Attempt ID', review.attempt_id],
+                ['Score', review.score],
+                ['Total Marks', review.total_marks],
+                ['Percentage', `${(review.percentage || 0).toFixed(1)}%`],
+                ['Submitted At', review.submitted_at ? new Date(review.submitted_at).toLocaleString() : 'N/A'],
+                []
+            ];
+
+            const csvContent = [
+                ...metadataRows.map((row) => row.map(escapeCSV).join(',')),
+                headers.map(escapeCSV).join(','),
+                ...csvRows.map((row) => row.map(escapeCSV).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `attempt-review-${attemptId}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            success('Attempt review downloaded successfully');
+        } catch (err) {
+            error(err?.data?.detail || err?.message || 'Failed to download attempt review');
+        } finally {
+            setIsDownloadingReview(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8">
@@ -235,6 +309,13 @@ const QuizResult = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4">
+                    <button
+                        onClick={handleDownloadAttemptReview}
+                        disabled={isDownloadingReview}
+                        className="flex-1 flex items-center justify-center px-8 py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg hover:bg-emerald-700 transition shadow-lg disabled:opacity-60"
+                    >
+                        {isDownloadingReview ? 'Preparing Download...' : 'Download Attempt Review'}
+                    </button>
                     <button
                         onClick={() => navigate('/dashboard')}
                         className="flex-1 flex items-center justify-center px-8 py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg"
