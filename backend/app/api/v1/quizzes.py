@@ -61,6 +61,7 @@ async def create_quiz(
         is_live_session=quiz_data.is_live_session,
         live_start_time=quiz_data.live_start_time,
         live_end_time=quiz_data.live_end_time,
+        is_active=False,
         total_marks=total_marks,
         marks_per_correct=quiz_data.marks_per_correct,
         negative_marking=quiz_data.negative_marking

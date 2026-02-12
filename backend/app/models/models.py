@@ -72,7 +72,7 @@ class Quiz(Base):
     negative_marking = Column(Float, default=0)  # Negative marks for incorrect answer
     
     # Status
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     

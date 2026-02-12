@@ -232,7 +232,10 @@ const QuizCreator = ({ embedded = false, onDone }) => {
                 await quizAPI.updateQuiz(quizId, payload);
                 success('Quiz updated successfully!');
             } else {
-                await quizAPI.createQuiz(payload);
+                const createdQuiz = await quizAPI.createQuiz(payload);
+                if (createdQuiz?.id && createdQuiz?.is_active) {
+                    await quizAPI.updateQuiz(createdQuiz.id, { is_active: false });
+                }
                 success('Quiz created successfully!');
             }
             if (onDone) {
@@ -357,6 +360,39 @@ const QuizCreator = ({ embedded = false, onDone }) => {
                                 min="1"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Marks Per Correct Answer
+                            </label>
+                            <input
+                                type="number"
+                                step="0.25"
+                                min="0"
+                                name="marks_per_correct"
+                                value={quizData.marks_per_correct}
+                                onChange={handleQuizChange}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Negative Marking (per wrong answer)
+                            </label>
+                            <input
+                                type="number"
+                                step="0.25"
+                                min="0"
+                                name="negative_marking"
+                                value={quizData.negative_marking}
+                                onChange={handleQuizChange}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">
+                                Example: enter 0.25 to deduct 0.25 marks for each incorrect answer.
+                            </p>
                         </div>
 
                         <div>

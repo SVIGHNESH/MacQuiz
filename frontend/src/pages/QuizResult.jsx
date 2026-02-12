@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { attemptAPI } from '../services/api';
+import { getGradeFromPercentage } from '../utils/settingsHelper';
 import {
     Trophy, Clock, CheckCircle, XCircle, Award, ArrowLeft,
     BarChart3, Target, TrendingUp, Home
@@ -43,12 +44,8 @@ const QuizResult = () => {
     }
 
     const percentage = result?.percentage || 0;
-    const passed = percentage >= 60;
-    const grade = percentage >= 90 ? 'A+' :
-                  percentage >= 80 ? 'A' :
-                  percentage >= 70 ? 'B' :
-                  percentage >= 60 ? 'C' :
-                  percentage >= 50 ? 'D' : 'F';
+    const grade = getGradeFromPercentage(percentage);
+    const passed = grade !== 'F' && grade !== 'N/A';
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8">
@@ -112,6 +109,7 @@ const QuizResult = () => {
                             <span className="text-gray-700 font-semibold">
                                 {grade === 'A+' ? 'Excellent!' :
                                  grade === 'A' ? 'Very Good!' :
+                                 grade === 'B+' ? 'Very Good' :
                                  grade === 'B' ? 'Good' :
                                  grade === 'C' ? 'Fair' :
                                  grade === 'D' ? 'Pass' : 'Fail'}

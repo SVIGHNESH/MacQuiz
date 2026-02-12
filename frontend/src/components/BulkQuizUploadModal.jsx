@@ -178,7 +178,7 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
                     duration_minutes: parseInt(firstQ.duration_minutes) || 30,
                     marks_per_correct: parseFloat(firstQ.marks_per_correct) || 1,
                     negative_marking: parseFloat(firstQ.negative_marking) || 0,
-                    is_active: firstQ.is_active === 'true' || firstQ.is_active === '1',
+                    is_active: false,
                 };
                 
                 // Only add optional fields if they have valid values
@@ -234,6 +234,17 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
                     });
 
                     if (response.ok) {
+                        const createdQuiz = await response.json().catch(() => null);
+                        if (createdQuiz?.id && createdQuiz?.is_active) {
+                            await fetch(`${API_BASE_URL}/api/v1/quizzes/${createdQuiz.id}`, {
+                                method: 'PUT',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ is_active: false })
+                            });
+                        }
                         successCount++;
                         console.log(`✅ Successfully uploaded: ${quiz.title}`);
                     } else {
@@ -293,11 +304,11 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
 
     const downloadTemplate = () => {
         const csvContent = `quiz_title,quiz_description,subject_id,duration_minutes,marks_per_correct,negative_marking,passing_marks,is_active,department,year,question_text,question_type,option_a,option_b,option_c,option_d,correct_answer,explanation
-Physics Chapter 1,Basic Physics Concepts,,30,1,0.25,40,true,Science,1st Year,What is the SI unit of force?,multiple_choice,Newton,Joule,Watt,Pascal,A,Force is measured in Newtons (N)
-Physics Chapter 1,Basic Physics Concepts,,30,1,0.25,40,true,Science,1st Year,Is energy conserved in a closed system?,true_false,,,,,true,Law of conservation of energy
-Physics Chapter 1,Basic Physics Concepts,,30,1,0.25,40,true,Science,1st Year,What is the formula for kinetic energy?,multiple_choice,1/2 mv²,mv,mv²,1/2 m²v,A,Kinetic energy = 1/2 × mass × velocity²
-Mathematics Quiz,Algebra Basics,,45,2,0.5,50,true,Mathematics,2nd Year,What is the value of x if 2x + 5 = 15?,multiple_choice,5,10,15,20,A,2x + 5 = 15 → 2x = 10 → x = 5
-Mathematics Quiz,Algebra Basics,,45,2,0.5,50,true,Mathematics,2nd Year,Is (a + b)² = a² + b²?,true_false,,,,,false,(a + b)² = a² + 2ab + b²`;
+    Physics Chapter 1,Basic Physics Concepts,,30,1,0.25,40,false,Science,1st Year,What is the SI unit of force?,multiple_choice,Newton,Joule,Watt,Pascal,A,Force is measured in Newtons (N)
+    Physics Chapter 1,Basic Physics Concepts,,30,1,0.25,40,false,Science,1st Year,Is energy conserved in a closed system?,true_false,,,,,true,Law of conservation of energy
+    Physics Chapter 1,Basic Physics Concepts,,30,1,0.25,40,false,Science,1st Year,What is the formula for kinetic energy?,multiple_choice,1/2 mv²,mv,mv²,1/2 m²v,A,Kinetic energy = 1/2 × mass × velocity²
+    Mathematics Quiz,Algebra Basics,,45,2,0.5,50,false,Mathematics,2nd Year,What is the value of x if 2x + 5 = 15?,multiple_choice,5,10,15,20,A,2x + 5 = 15 → 2x = 10 → x = 5
+    Mathematics Quiz,Algebra Basics,,45,2,0.5,50,false,Mathematics,2nd Year,Is (a + b)² = a² + b²?,true_false,,,,,false,(a + b)² = a² + 2ab + b²`;
         
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);

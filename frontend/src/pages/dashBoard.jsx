@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { userAPI, quizAPI, attemptAPI, analyticsAPI } from "../services/api";
-import { getDepartments } from "../utils/settingsHelper";
+import { getDepartments, getGradeFromPercentage } from "../utils/settingsHelper";
 import BulkUploadModal from "../components/BulkUploadModal";
 import BulkQuizUploadModal from "../components/BulkQuizUploadModal";
 import QuizAssignmentModal from "../components/QuizAssignmentModal";
@@ -11,7 +11,7 @@ import QuizCreator from "./QuizCreator";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
-    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award
 } from 'lucide-react';
 
 // No mock data needed - all data fetched from API
@@ -128,6 +128,43 @@ const ActivityItem = ({ user, action, time, status }) => {
         </div>
     );
 };
+
+class TabErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, errorMessage: '' };
+    }
+
+    static getDerivedStateFromError(error) {
+        return {
+            hasError: true,
+            errorMessage: error?.message || 'Unexpected error'
+        };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('Tab render error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="bg-white rounded-2xl shadow-lg border border-red-100 p-6">
+                    <h3 className="text-lg font-bold text-red-700 mb-2">Unable to load this section</h3>
+                    <p className="text-sm text-red-600 mb-4">{this.state.errorMessage}</p>
+                    <button
+                        onClick={() => this.setState({ hasError: false, errorMessage: '' })}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition"
+                    >
+                        Retry
+                    </button>
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
 
 // Card: Quick link for Admin to add new user (Teacher or Student)
 const AddNewUserCard = ({ onAddClick }) => (
@@ -1978,7 +2015,10 @@ const TeacherQuizManagement = () => {
             console.log('Fetching quizzes...');
             const data = await quizAPI.getAllQuizzes();
             console.log('Quizzes loaded:', data);
-            setQuizzes(data || []);
+            const normalizedQuizzes = Array.isArray(data)
+                ? data.filter((quiz) => quiz && typeof quiz === 'object' && quiz.id)
+                : [];
+            setQuizzes(normalizedQuizzes);
         } catch (err) {
             console.error('Failed to load quizzes:', err);
             error(`Failed to load quizzes: ${err.data?.detail || err.message || 'Unknown error'}`);
@@ -2110,7 +2150,12 @@ const TeacherQuizManagement = () => {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {quizzes.map((quiz) => (
+                        {quizzes.filter((quiz) => quiz && quiz.id).map((quiz) => {
+                            const quizTitle = typeof quiz.title === 'string' && quiz.title.trim() ? quiz.title : 'Untitled Quiz';
+                            const quizDescription = typeof quiz.description === 'string' && quiz.description.trim()
+                                ? quiz.description
+                                : 'No description available';
+                            return (
                             <div key={quiz.id} className={`border-2 rounded-xl p-6 transition ${
                                 quiz.is_active 
                                     ? 'border-green-200 bg-green-50/30 hover:border-green-300' 
@@ -2119,7 +2164,7 @@ const TeacherQuizManagement = () => {
                                 <div className="flex justify-between items-start">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-3">
-                                            <h3 className="text-xl font-bold text-gray-900">{quiz.title}</h3>
+                                            <h3 className="text-xl font-bold text-gray-900">{quizTitle}</h3>
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                                                 quiz.is_active 
                                                     ? 'bg-green-100 text-green-800' 
@@ -2128,7 +2173,7 @@ const TeacherQuizManagement = () => {
                                                 {quiz.is_active ? '🟢 LIVE' : '⚪ Inactive'}
                                             </span>
                                         </div>
-                                        <p className="text-gray-600 mt-1">{quiz.description}</p>
+                                        <p className="text-gray-600 mt-1">{quizDescription}</p>
                                         <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                                             <span className="flex items-center">
                                                 <FileText size={16} className="mr-1" />
@@ -2141,6 +2186,10 @@ const TeacherQuizManagement = () => {
                                             <span className="flex items-center">
                                                 <Users size={16} className="mr-1" />
                                                 {quiz.attempts || 0} Attempts
+                                            </span>
+                                            <span className="flex items-center">
+                                                <Award size={16} className="mr-1" />
+                                                +{quiz.marks_per_correct || 1} / -{quiz.negative_marking || 0}
                                             </span>
                                         </div>
                                     </div>
@@ -2181,7 +2230,8 @@ const TeacherQuizManagement = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                        );
+                        })}
                     </div>
                 )}
             </div>
@@ -3061,20 +3111,25 @@ const StudentResultsView = () => {
             return;
         }
 
-        const headers = ['Student Name', 'Email', 'Quiz', 'Score', 'Total Marks', 'Percentage', 'Correct Answers', 'Total Questions', 'Time Taken', 'Submitted At', 'Status'];
-        const csvData = filteredAttempts.map(attempt => [
-            attempt.student_name || getStudentName(attempt.student_id),
-            attempt.student_email || '',
-            attempt.quiz_title || `Quiz ${attempt.quiz_id}`,
-            attempt.score?.toFixed(1) || 0,
-            attempt.quiz_total_marks || attempt.total_marks,
-            (attempt.percentage || 0).toFixed(1) + '%',
-            attempt.correct_answers || 0,
-            attempt.total_questions || 0,
-            attempt.time_taken || 'N/A',
-            attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'Not submitted',
-            (attempt.percentage || 0) >= 60 ? 'Passed' : 'Failed'
-        ]);
+        const headers = ['Student Name', 'Email', 'Quiz', 'Score', 'Total Marks', 'Percentage', 'Grade', 'Correct Answers', 'Total Questions', 'Time Taken', 'Submitted At', 'Status'];
+        const csvData = filteredAttempts.map((attempt) => {
+            const percentage = attempt.percentage || 0;
+            const grade = getGradeFromPercentage(percentage);
+            return [
+                attempt.student_name || getStudentName(attempt.student_id),
+                attempt.student_email || '',
+                attempt.quiz_title || `Quiz ${attempt.quiz_id}`,
+                attempt.score?.toFixed(1) || 0,
+                attempt.quiz_total_marks || attempt.total_marks,
+                percentage.toFixed(1) + '%',
+                grade,
+                attempt.correct_answers || 0,
+                attempt.total_questions || 0,
+                attempt.time_taken || 'N/A',
+                attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'Not submitted',
+                grade === 'F' || grade === 'N/A' ? 'Failed' : 'Passed'
+            ];
+        });
 
         const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -3165,7 +3220,10 @@ const StudentResultsView = () => {
                     <div className="text-sm text-gray-600">Pass Rate</div>
                     <div className="text-2xl font-bold text-yellow-600">
                         {filteredAttempts.length > 0
-                            ? ((filteredAttempts.filter(a => (a.percentage || 0) >= 60).length / filteredAttempts.length) * 100).toFixed(1)
+                            ? ((filteredAttempts.filter(a => {
+                                const grade = getGradeFromPercentage(a.percentage || 0);
+                                return grade !== 'F' && grade !== 'N/A';
+                            }).length / filteredAttempts.length) * 100).toFixed(1)
                             : '0'}%
                     </div>
                 </div>
@@ -3192,6 +3250,7 @@ const StudentResultsView = () => {
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Quiz</th>
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Score</th>
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Percentage</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Grade</th>
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Correct/Total</th>
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Time Taken</th>
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Submitted</th>
@@ -3201,7 +3260,8 @@ const StudentResultsView = () => {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {filteredAttempts.map((attempt) => {
                                 const percentage = attempt.percentage || 0;
-                                const passed = percentage >= 60;
+                                const grade = getGradeFromPercentage(percentage);
+                                const passed = grade !== 'F' && grade !== 'N/A';
                                 
                                 return (
                                     <tr key={attempt.id} className="hover:bg-gray-50">
@@ -3221,6 +3281,11 @@ const StudentResultsView = () => {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`font-bold ${passed ? 'text-green-600' : 'text-red-600'}`}>
                                                 {percentage.toFixed(1)}%
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                {grade}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-gray-600">
@@ -3596,8 +3661,16 @@ export default function AdminDashboard() {
             case 'Quizzes':
                 // Teachers can create/manage quizzes, Admins can only monitor
                 return user?.role === 'teacher' 
-                    ? <TeacherQuizManagement /> 
-                    : <AdminQuizMonitoring />;
+                    ? (
+                        <TabErrorBoundary>
+                            <TeacherQuizManagement />
+                        </TabErrorBoundary>
+                    )
+                    : (
+                        <TabErrorBoundary>
+                            <AdminQuizMonitoring />
+                        </TabErrorBoundary>
+                    );
             case 'Student Results':
                 return <StudentResultsView />;
             case 'Detailed Reports':
