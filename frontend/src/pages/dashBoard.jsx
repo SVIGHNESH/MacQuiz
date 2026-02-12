@@ -3046,11 +3046,20 @@ const StudentResultsView = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [filterQuiz, setFilterQuiz] = useState('all');
     const [filterStudent, setFilterStudent] = useState('all');
+    const [liveQuizFocus, setLiveQuizFocus] = useState('all');
     const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
         fetchAllData();
     }, [refreshKey]);
+
+    useEffect(() => {
+        const liveRefresh = setInterval(() => {
+            setRefreshKey(prev => prev + 1);
+        }, 10000);
+
+        return () => clearInterval(liveRefresh);
+    }, []);
 
     useEffect(() => {
         const onFocus = () => setRefreshKey(prev => prev + 1);
@@ -3077,7 +3086,7 @@ const StudentResultsView = () => {
             }
             
             try {
-                attemptsData = await attemptAPI.getAllAttempts({});
+                attemptsData = await attemptAPI.getAllAttempts({ completed_only: false });
             } catch (err) {
                 // For APIError objects from fetchAPI
                 if (err?.status) {
@@ -3124,6 +3133,31 @@ const StudentResultsView = () => {
         return true;
     });
 
+    const liveAttempts = filteredAttempts.filter(attempt => !attempt.is_completed);
+    const completedAttempts = filteredAttempts.filter(attempt => attempt.is_completed);
+    const focusedLiveAttempts = liveAttempts.filter((attempt) => {
+        if (liveQuizFocus === 'all') return true;
+        return attempt.quiz_id === parseInt(liveQuizFocus);
+    });
+
+    const formatRemaining = (seconds) => {
+        if (seconds === null || seconds === undefined) return '—';
+        if (seconds <= 0) return 'Expired';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}m ${secs}s`;
+    };
+
+    const formatElapsed = (startedAt) => {
+        if (!startedAt) return '—';
+        const started = new Date(startedAt);
+        const now = new Date();
+        const seconds = Math.max(0, Math.floor((now - started) / 1000));
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}m ${secs}s`;
+    };
+
     // Get student name by ID
     const getStudentName = (studentId) => {
         const student = students.find(s => s.id === studentId);
@@ -3132,13 +3166,13 @@ const StudentResultsView = () => {
 
     // Export to CSV
     const exportToCSV = () => {
-        if (filteredAttempts.length === 0) {
+        if (completedAttempts.length === 0) {
             error('No data to export');
             return;
         }
 
         const headers = ['Student Name', 'Email', 'Quiz', 'Score', 'Total Marks', 'Percentage', 'Grade', 'Correct Answers', 'Total Questions', 'Time Taken', 'Submitted At', 'Status'];
-        const csvData = filteredAttempts.map((attempt) => {
+        const csvData = completedAttempts.map((attempt) => {
             const percentage = attempt.percentage || 0;
             const grade = getGradeFromPercentage(percentage);
             return [
@@ -3186,7 +3220,7 @@ const StudentResultsView = () => {
                     </button>
                     <button
                         onClick={exportToCSV}
-                        disabled={filteredAttempts.length === 0}
+                        disabled={completedAttempts.length === 0}
                         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                         <Download size={20} />
@@ -3228,28 +3262,88 @@ const StudentResultsView = () => {
                 </div>
             </div>
 
+            {/* Live Session Monitor */}
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-bold text-red-900">Live Session Monitor</h3>
+                    <span className="text-xs text-red-700 bg-red-100 px-2 py-1 rounded-full">Auto-refresh: 10s</span>
+                </div>
+
+                <div className="mb-3 max-w-sm">
+                    <label className="block text-xs font-medium text-red-800 mb-1">Focus by Quiz</label>
+                    <select
+                        value={liveQuizFocus}
+                        onChange={(e) => setLiveQuizFocus(e.target.value)}
+                        className="w-full px-3 py-2 border border-red-200 rounded-lg bg-white text-sm focus:ring-2 focus:ring-red-300 focus:border-red-300"
+                    >
+                        <option value="all">All Live Quizzes</option>
+                        {quizzes.map(quiz => (
+                            <option key={quiz.id} value={quiz.id}>{quiz.title}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {focusedLiveAttempts.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-left text-red-800 border-b border-red-200">
+                                    <th className="px-3 py-2">Student</th>
+                                    <th className="px-3 py-2">Quiz</th>
+                                    <th className="px-3 py-2">Progress</th>
+                                    <th className="px-3 py-2">Elapsed</th>
+                                    <th className="px-3 py-2">Remaining</th>
+                                    <th className="px-3 py-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {focusedLiveAttempts.map((attempt) => (
+                                    <tr key={attempt.id} className="border-b border-red-100">
+                                        <td className="px-3 py-2 font-medium text-gray-900">{attempt.student_name || getStudentName(attempt.student_id)}</td>
+                                        <td className="px-3 py-2 text-gray-700">{attempt.quiz_title || `Quiz ${attempt.quiz_id}`}</td>
+                                        <td className="px-3 py-2 text-gray-700">
+                                            {attempt.answered_count || 0}/{attempt.total_questions || 0}
+                                            <span className="ml-2 text-xs text-gray-500">({(attempt.progress_percentage || 0).toFixed(1)}%)</span>
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-700">{formatElapsed(attempt.started_at)}</td>
+                                        <td className="px-3 py-2 font-semibold text-red-700">{formatRemaining(attempt.remaining_seconds)}</td>
+                                        <td className="px-3 py-2">
+                                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
+                                                In Progress
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <p className="text-sm text-red-800">No students are currently in an active quiz session for the selected quiz.</p>
+                )}
+            </div>
+
             {/* Summary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Total Attempts</div>
-                    <div className="text-2xl font-bold text-blue-600">{filteredAttempts.length}</div>
+                    <div className="text-2xl font-bold text-blue-600">{completedAttempts.length}</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Average Score</div>
                     <div className="text-2xl font-bold text-green-600">
-                        {filteredAttempts.length > 0
-                            ? (filteredAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / filteredAttempts.length).toFixed(1)
+                        {completedAttempts.length > 0
+                            ? (completedAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / completedAttempts.length).toFixed(1)
                             : '0'}%
                     </div>
                 </div>
                 <div className="bg-yellow-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Pass Rate</div>
                     <div className="text-2xl font-bold text-yellow-600">
-                        {filteredAttempts.length > 0
-                            ? ((filteredAttempts.filter(a => {
+                        {completedAttempts.length > 0
+                            ? ((completedAttempts.filter(a => {
                                 const grade = getGradeFromPercentage(a.percentage || 0);
                                 return grade !== 'F' && grade !== 'N/A';
-                            }).length / filteredAttempts.length) * 100).toFixed(1)
+                            }).length / completedAttempts.length) * 100).toFixed(1)
                             : '0'}%
                     </div>
                 </div>
@@ -3284,7 +3378,7 @@ const StudentResultsView = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredAttempts.map((attempt) => {
+                                    {completedAttempts.map((attempt) => {
                                 const percentage = attempt.percentage || 0;
                                 const grade = getGradeFromPercentage(percentage);
                                 const passed = grade !== 'F' && grade !== 'N/A';

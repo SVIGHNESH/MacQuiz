@@ -503,6 +503,7 @@ async def get_all_attempts(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get all quiz attempts with enhanced details for teachers/admins"""
+    now = datetime.now()
     query = db.query(QuizAttempt)
 
     # Teachers can only see attempts for their own quizzes
@@ -532,6 +533,19 @@ async def get_all_attempts(
             Answer.attempt_id == attempt.id,
             Answer.is_correct == True
         ).count()
+        answered_count = db.query(Answer).filter(Answer.attempt_id == attempt.id).count()
+
+        remaining_seconds = None
+        if not attempt.is_completed and quiz:
+            if quiz.is_live_session and quiz.live_end_time:
+                remaining_seconds = max(0, int((quiz.live_end_time - now).total_seconds()))
+            elif quiz.duration_minutes and attempt.started_at:
+                deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
+                remaining_seconds = max(0, int((deadline - now).total_seconds()))
+
+        progress_percentage = 0.0
+        if total_questions > 0:
+            progress_percentage = round((answered_count / total_questions) * 100, 2)
         
         # Format time taken
         time_taken_str = None
@@ -557,9 +571,13 @@ async def get_all_attempts(
             "is_graded": bool(attempt.is_graded),
             "quiz_title": quiz.title if quiz else None,
             "correct_answers": correct_answers,
+            "answered_count": answered_count,
+            "progress_percentage": progress_percentage,
             "total_questions": total_questions,
             "quiz_total_marks": float(quiz.total_marks) if quiz else float(attempt.total_marks),
-            "time_taken": time_taken_str
+            "time_taken": time_taken_str,
+            "remaining_seconds": remaining_seconds,
+            "status": "completed" if attempt.is_completed else "in_progress"
         }
         result.append(attempt_dict)
     

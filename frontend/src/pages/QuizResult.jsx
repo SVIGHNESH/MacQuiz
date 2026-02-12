@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
-import { attemptAPI } from '../services/api';
+import { attemptAPI, quizAPI } from '../services/api';
 import { getGradeFromPercentage } from '../utils/settingsHelper';
 import {
     Trophy, Clock, CheckCircle, XCircle, Award, ArrowLeft,
@@ -14,6 +14,7 @@ const QuizResult = () => {
     const { error } = useToast();
 
     const [result, setResult] = useState(null);
+    const [quizConfig, setQuizConfig] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -21,6 +22,15 @@ const QuizResult = () => {
             try {
                 const data = await attemptAPI.getAttempt(attemptId);
                 setResult(data);
+
+                if (data?.quiz_id) {
+                    try {
+                        const quizData = await quizAPI.getQuiz(data.quiz_id);
+                        setQuizConfig(quizData);
+                    } catch (_quizErr) {
+                        setQuizConfig(null);
+                    }
+                }
             } catch {
                 error('Failed to load quiz result');
                 navigate('/dashboard');
@@ -48,6 +58,9 @@ const QuizResult = () => {
     const passed = grade !== 'F' && grade !== 'N/A';
     const correctAnswers = result?.correct_answers || 0;
     const totalQuestions = result?.total_questions || 0;
+    const wrongAnswers = totalQuestions - correctAnswers;
+    const negativeMarkingPerWrong = quizConfig?.negative_marking || 0;
+    const negativeMarksLost = wrongAnswers > 0 ? (wrongAnswers * negativeMarkingPerWrong) : 0;
     const accuracy = totalQuestions > 0 ? ((correctAnswers / totalQuestions) * 100) : 0;
     const hasScoreAccuracyGap = Math.abs(accuracy - percentage) >= 5;
 
@@ -149,7 +162,7 @@ const QuizResult = () => {
                             <div>
                                 <div className="text-sm text-gray-500">Wrong Answers</div>
                                 <div className="text-2xl font-bold text-gray-900">
-                                    {totalQuestions - correctAnswers}
+                                    {wrongAnswers}
                                 </div>
                             </div>
                         </div>
@@ -174,6 +187,23 @@ const QuizResult = () => {
                                 <div className="text-sm text-gray-500">Accuracy</div>
                                 <div className="text-2xl font-bold text-gray-900">
                                     {accuracy.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                                <XCircle className="text-amber-600" size={24} />
+                            </div>
+                            <div>
+                                <div className="text-sm text-gray-500">Negative Marks Deducted</div>
+                                <div className="text-2xl font-bold text-gray-900">
+                                    {negativeMarksLost.toFixed(2)}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    {negativeMarkingPerWrong > 0
+                                        ? `${wrongAnswers} wrong × ${negativeMarkingPerWrong}`
+                                        : 'No negative marking configured'}
                                 </div>
                             </div>
                         </div>
