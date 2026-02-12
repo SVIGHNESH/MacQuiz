@@ -11,7 +11,7 @@ import QuizCreator from "./QuizCreator";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
-    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award, ChevronDown, Copy, Palette
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award, ChevronDown, Copy, Moon, Sun
 } from 'lucide-react';
 
 // No mock data needed - all data fetched from API
@@ -3718,12 +3718,13 @@ export default function AdminDashboard() {
     const [statsRefresh, setStatsRefresh] = useState(0);
     const [statsData, setStatsData] = useState(null);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-    const [uiTheme, setUiTheme] = useState(() => localStorage.getItem('macquiz_ui_theme') || 'classic');
+    const [colorMode, setColorMode] = useState(() => localStorage.getItem('macquiz_color_mode') || 'light');
     const profileMenuRef = useRef(null);
 
     useEffect(() => {
-        localStorage.setItem('macquiz_ui_theme', uiTheme);
-    }, [uiTheme]);
+        localStorage.setItem('macquiz_color_mode', colorMode);
+        document.documentElement.classList.toggle('theme-dark', colorMode === 'dark');
+    }, [colorMode]);
 
     const fetchDashboardStats = useCallback(async () => {
         setStatsLoading(true);
@@ -4115,12 +4116,12 @@ export default function AdminDashboard() {
         </div>
     );
 
-    const isSoftTheme = uiTheme === 'soft';
+    const isDarkMode = colorMode === 'dark';
 
     return (
-        <div className={`min-h-screen flex flex-col lg:flex-row font-inter ${isSoftTheme ? 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50' : 'bg-gray-50'}`}>
+        <div className={`min-h-screen flex flex-col lg:flex-row font-inter ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
             {/* Mobile Header */}
-            <div className={`lg:hidden border-b shadow-md p-4 flex items-center justify-between sticky top-0 z-30 ${isSoftTheme ? 'bg-white/95 backdrop-blur-sm' : 'bg-white'}`}>
+            <div className="lg:hidden border-b shadow-md p-4 flex items-center justify-between sticky top-0 z-30 bg-white">
                 <div className="flex items-center space-x-2">
                     <button
                         onClick={() => setActiveTab('Dashboard')}
@@ -4134,11 +4135,11 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => setUiTheme(prev => prev === 'classic' ? 'soft' : 'classic')}
+                        onClick={() => setColorMode(prev => prev === 'light' ? 'dark' : 'light')}
                         className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                        title={`Switch to ${isSoftTheme ? 'Classic' : 'Soft'} theme`}
+                        title={`Switch to ${isDarkMode ? 'Light' : 'Dark'} mode`}
                     >
-                        <Palette size={18} />
+                        {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
                     </button>
                     <button
                         onClick={handleLogout}
@@ -4150,7 +4151,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Sidebar Navigation */}
-            <aside className={`hidden lg:flex w-64 flex-col fixed inset-y-0 border-r shadow-lg z-20 ${isSoftTheme ? 'bg-white/90 backdrop-blur-sm' : 'bg-white'}`}>
+            <aside className="hidden lg:flex w-64 flex-col fixed inset-y-0 border-r shadow-lg z-20 bg-white">
                 <div className="p-6 text-2xl font-extrabold text-blue-700 border-b">
                     MacQuiz <span className="text-gray-400 font-light">
                         {portalLabel}
@@ -4200,12 +4201,12 @@ export default function AdminDashboard() {
                     {/* Profile Dropdown - Hidden on mobile, shown on desktop */}
                     <div className="hidden sm:flex items-start gap-2" ref={profileMenuRef}>
                         <button
-                            onClick={() => setUiTheme(prev => prev === 'classic' ? 'soft' : 'classic')}
+                            onClick={() => setColorMode(prev => prev === 'light' ? 'dark' : 'light')}
                             className="h-12 px-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-100 text-indigo-600 transition duration-150 flex items-center gap-2"
-                            title={`Switch to ${isSoftTheme ? 'Classic' : 'Soft'} theme`}
+                            title={`Switch to ${isDarkMode ? 'Light' : 'Dark'} mode`}
                         >
-                            <Palette size={16} />
-                            <span className="text-xs font-medium">{isSoftTheme ? 'Classic' : 'Soft'}</span>
+                            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                            <span className="text-xs font-medium">{isDarkMode ? 'Light' : 'Dark'}</span>
                         </button>
                         <div className="relative">
                             <button
