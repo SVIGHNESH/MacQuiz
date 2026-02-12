@@ -728,7 +728,8 @@ async def get_attempt(
         "correct_answers": correct_answers,
         "total_questions": total_questions,
         "quiz_total_marks": quiz.total_marks if quiz else attempt.total_marks,
-        "time_taken": time_taken_str
+        "time_taken": time_taken_str,
+        "negative_marking": quiz.negative_marking if quiz else 0
     }
 
     return attempt_dict

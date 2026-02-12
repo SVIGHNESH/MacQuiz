@@ -279,6 +279,7 @@ class QuizAttemptResponse(BaseModel):
     correct_answers: Optional[int] = None
     total_questions: Optional[int] = None
     quiz_total_marks: Optional[float] = None
+    negative_marking: Optional[float] = None
     time_taken: Optional[str] = None
     
     class Config:

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
-import { attemptAPI, quizAPI } from '../services/api';
+import { attemptAPI } from '../services/api';
 import { getGradeFromPercentage } from '../utils/settingsHelper';
 import {
     Trophy, Clock, CheckCircle, XCircle, Award, ArrowLeft,
@@ -14,7 +14,6 @@ const QuizResult = () => {
     const { error, success } = useToast();
 
     const [result, setResult] = useState(null);
-    const [quizConfig, setQuizConfig] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isDownloadingReview, setIsDownloadingReview] = useState(false);
 
@@ -23,15 +22,6 @@ const QuizResult = () => {
             try {
                 const data = await attemptAPI.getAttempt(attemptId);
                 setResult(data);
-
-                if (data?.quiz_id) {
-                    try {
-                        const quizData = await quizAPI.getQuiz(data.quiz_id);
-                        setQuizConfig(quizData);
-                    } catch (_quizErr) {
-                        setQuizConfig(null);
-                    }
-                }
             } catch {
                 error('Failed to load quiz result');
                 navigate('/dashboard');
@@ -60,7 +50,7 @@ const QuizResult = () => {
     const correctAnswers = result?.correct_answers || 0;
     const totalQuestions = result?.total_questions || 0;
     const wrongAnswers = totalQuestions - correctAnswers;
-    const negativeMarkingPerWrong = quizConfig?.negative_marking || 0;
+    const negativeMarkingPerWrong = result?.negative_marking || 0;
     const negativeMarksLost = wrongAnswers > 0 ? (wrongAnswers * negativeMarkingPerWrong) : 0;
     const accuracy = totalQuestions > 0 ? ((correctAnswers / totalQuestions) * 100) : 0;
     const hasScoreAccuracyGap = Math.abs(accuracy - percentage) >= 5;
