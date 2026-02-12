@@ -380,64 +380,6 @@ async def get_saved_answers(
         ]
     }
 
-@router.get("/{attempt_id}", response_model=QuizAttemptResponse)
-async def get_attempt(
-    attempt_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Get a specific quiz attempt by ID with detailed results"""
-    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == attempt_id).first()
-    
-    if not attempt:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Attempt not found"
-        )
-    
-    # Students can only view their own attempts, teachers/admins can view any
-    if current_user.role == "student" and attempt.student_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view this attempt"
-        )
-    
-    # Get quiz and calculate additional fields
-    quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
-    total_questions = db.query(Question).filter(Question.quiz_id == attempt.quiz_id).count()
-    correct_answers = db.query(Answer).filter(
-        Answer.attempt_id == attempt.id,
-        Answer.is_correct == True
-    ).count()
-    
-    # Format time taken
-    time_taken_str = None
-    if attempt.time_taken_minutes:
-        minutes = int(attempt.time_taken_minutes)
-        seconds = int((attempt.time_taken_minutes - minutes) * 60)
-        time_taken_str = f"{minutes}m {seconds}s"
-    
-    # Convert to dict and add extra fields
-    attempt_dict = {
-        "id": attempt.id,
-        "quiz_id": attempt.quiz_id,
-        "student_id": attempt.student_id,
-        "score": attempt.score,
-        "total_marks": attempt.total_marks,
-        "percentage": attempt.percentage,
-        "started_at": attempt.started_at,
-        "submitted_at": attempt.submitted_at,
-        "time_taken_minutes": attempt.time_taken_minutes,
-        "is_completed": attempt.is_completed,
-        "is_graded": attempt.is_graded,
-        "correct_answers": correct_answers,
-        "total_questions": total_questions,
-        "quiz_total_marks": quiz.total_marks if quiz else attempt.total_marks,
-        "time_taken": time_taken_str
-    }
-    
-    return attempt_dict
-
 @router.get("/{attempt_id}/remaining-time")
 async def get_remaining_time(
     attempt_id: int,
@@ -714,3 +656,62 @@ async def get_recent_activity(
             })
     
     return activities
+
+
+@router.get("/{attempt_id}", response_model=QuizAttemptResponse)
+async def get_attempt(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get a specific quiz attempt by ID with detailed results"""
+    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == attempt_id).first()
+
+    if not attempt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attempt not found"
+        )
+
+    # Students can only view their own attempts, teachers/admins can view any
+    if current_user.role == "student" and attempt.student_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this attempt"
+        )
+
+    # Get quiz and calculate additional fields
+    quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
+    total_questions = db.query(Question).filter(Question.quiz_id == attempt.quiz_id).count()
+    correct_answers = db.query(Answer).filter(
+        Answer.attempt_id == attempt.id,
+        Answer.is_correct == True
+    ).count()
+
+    # Format time taken
+    time_taken_str = None
+    if attempt.time_taken_minutes:
+        minutes = int(attempt.time_taken_minutes)
+        seconds = int((attempt.time_taken_minutes - minutes) * 60)
+        time_taken_str = f"{minutes}m {seconds}s"
+
+    # Convert to dict and add extra fields
+    attempt_dict = {
+        "id": attempt.id,
+        "quiz_id": attempt.quiz_id,
+        "student_id": attempt.student_id,
+        "score": attempt.score,
+        "total_marks": attempt.total_marks,
+        "percentage": attempt.percentage,
+        "started_at": attempt.started_at,
+        "submitted_at": attempt.submitted_at,
+        "time_taken_minutes": attempt.time_taken_minutes,
+        "is_completed": attempt.is_completed,
+        "is_graded": attempt.is_graded,
+        "correct_answers": correct_answers,
+        "total_questions": total_questions,
+        "quiz_total_marks": quiz.total_marks if quiz else attempt.total_marks,
+        "time_taken": time_taken_str
+    }
+
+    return attempt_dict

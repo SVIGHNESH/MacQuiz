@@ -10,7 +10,7 @@ import QuizAssignmentModal from "../components/QuizAssignmentModal";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
-    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2
 } from 'lucide-react';
 
 // No mock data needed - all data fetched from API
@@ -26,6 +26,7 @@ const validatePasswordStrength = (password) => {
         uppercase: /[A-Z]/.test(password),
         lowercase: /[a-z]/.test(password),
         number: /[0-9]/.test(password),
+        // eslint-disable-next-line no-useless-escape
         special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
     };
 
@@ -143,6 +144,79 @@ const AddNewUserCard = ({ onAddClick }) => (
         </div>
     </div>
 );
+
+const SdcTeamSection = () => {
+    const backendTeam = [
+        'Ritik Kumar',
+        'Devang Pathak',
+        'Vivek Sharma',
+        'Vighnesh Shukla'
+    ];
+
+    const frontendTeam = [
+        'Dakshita Tiwari',
+        'Anjali Tiwari',
+        'Rohit',
+        'Satyam Diwaker'
+    ];
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Software Development Cell (SDC)</h2>
+                <p className="text-gray-600">MacQuiz Development Team (Student Contributors)</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <Code2 size={20} className="mr-2 text-blue-600" />
+                        Backend Team
+                    </h3>
+                    <ul className="space-y-2">
+                        {backendTeam.map((name) => (
+                            <li key={name} className="px-3 py-2 rounded-lg bg-blue-50 text-gray-800 font-medium">
+                                {name}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <Code2 size={20} className="mr-2 text-indigo-600" />
+                        Frontend Team
+                    </h3>
+                    <ul className="space-y-2">
+                        {frontendTeam.map((name) => (
+                            <li key={name} className="px-3 py-2 rounded-lg bg-indigo-50 text-gray-800 font-medium">
+                                {name}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Tech Stack Used</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
+                        <p className="text-sm text-gray-600 mb-1">Backend</p>
+                        <p className="text-lg font-semibold text-gray-900">FastAPI</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                        <p className="text-sm text-gray-600 mb-1">Frontend</p>
+                        <p className="text-lg font-semibold text-gray-900">React</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-green-50 border border-green-100">
+                        <p className="text-sm text-gray-600 mb-1">Database</p>
+                        <p className="text-lg font-semibold text-gray-900">MySQL</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // New Component: Form for creating new users
 const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
@@ -1014,7 +1088,7 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
         try {
             const response = await userAPI.getAllUsers();
             setUsers(response);
-        } catch (err) {
+        } catch (_err) {
             error("Failed to load users");
         } finally {
             setIsLoading(false);
@@ -1463,7 +1537,6 @@ const DetailedReportsTool = () => {
     const [reportData, setReportData] = useState(null);
     const [allUsers, setAllUsers] = useState([]);
     const [allQuizzes, setAllQuizzes] = useState([]);
-    const [allAttempts, setAllAttempts] = useState([]);
 
     // Fetch real data on component mount
     useEffect(() => {
@@ -1775,9 +1848,7 @@ const DetailedReportsTool = () => {
 // Quiz Management Component
 // Teacher Quiz Management - Create and manage own quizzes
 const TeacherStudentsView = () => {
-    const { user } = useAuth();
     const { error } = useToast();
-    const navigate = useNavigate();
     const [students, setStudents] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
@@ -1791,10 +1862,6 @@ const TeacherStudentsView = () => {
     const fetchTeacherStudents = async () => {
         setIsLoading(true);
         try {
-            // Get all quizzes created by this teacher
-            const quizzes = await quizAPI.getAllQuizzes();
-            const teacherQuizIds = quizzes.map(q => q.id);
-
             // Get all users
             const allUsers = await userAPI.getAllUsers();
             
@@ -2450,16 +2517,6 @@ const SettingsComponent = () => {
         }
         localStorage.setItem('quiz_platform_settings', JSON.stringify(platformSettings));
         success('Platform settings saved successfully');
-    };
-
-    // Helper function to get grade from percentage
-    const getGradeFromPercentage = (percentage) => {
-        for (let scale of gradingScale) {
-            if (percentage >= scale.minPercentage && percentage <= scale.maxPercentage) {
-                return scale.grade;
-            }
-        }
-        return 'N/A';
     };
 
     return (
@@ -3191,7 +3248,7 @@ const StudentResultsView = () => {
 export default function AdminDashboard() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const { success, error } = useToast();
+    const { success } = useToast();
     
     // userViewMode can be 'list' (show table) or 'add' (show form)
     const [activeTab, setActiveTab] = useState('Dashboard');
@@ -3223,7 +3280,7 @@ export default function AdminDashboard() {
             }
 
             setStatsData(null);
-        } catch (err) {
+        } catch (_err) {
             // Keep the dashboard usable even if stats fail to load
             setStatsData(null);
         } finally {
@@ -3423,6 +3480,7 @@ export default function AdminDashboard() {
         { name: "Quizzes", icon: FileText, title: "My Quizzes" },
         { name: "Students", icon: Users, title: "My Students" },
         { name: "Student Results", icon: Trophy, title: "Student Results" },
+        { name: "SDC Team", icon: Code2, title: "SDC Team" },
         { name: "Settings", icon: Settings, title: "Settings" },
     ] : [
         { name: "Dashboard", icon: LayoutDashboard, title: "Dashboard" },
@@ -3432,6 +3490,7 @@ export default function AdminDashboard() {
         { name: "Quizzes", icon: FileText, title: "Quiz Management" },
         { name: "Student Results", icon: Trophy, title: "Student Results" },
         { name: "Detailed Reports", icon: BarChart3, title: "Detailed Reports" },
+        { name: "SDC Team", icon: Code2, title: "SDC Team" },
         { name: "Settings", icon: Settings, title: "Settings" },
     ];
 
@@ -3452,7 +3511,6 @@ export default function AdminDashboard() {
     const renderContent = () => {
         switch (activeTab) {
             case 'Dashboard': { // Added braces to fix no-case-declarations
-                const hasActivity = false; // No activity tracking for now
                 return (
                     <div className="space-y-8">
                         {/* 4 Block Metrics (Colors reverted) */}
@@ -3522,6 +3580,8 @@ export default function AdminDashboard() {
                 return <StudentResultsView />;
             case 'Detailed Reports':
                 return <DetailedReportsTool />;
+            case 'SDC Team':
+                return <SdcTeamSection />;
             case 'Settings':
                 return <SettingsComponent />;
             default:
@@ -3566,37 +3626,41 @@ export default function AdminDashboard() {
                         {user?.role === 'teacher' ? 'Teacher Portal' : 'Admin'}
                     </span>
                 </div>
-                <nav className="flex-1 p-4 space-y-2">
-                    {navItems.map((item) => {
-                        const isActive = activeTab === item.name;
-                        return (
-                            <button
-                                key={item.name}
-                                onClick={() => {
-                                    setActiveTab(item.name);
-                                    if (item.onClick) item.onClick();
-                                }}
-                                className={`w-full flex items-center p-3 rounded-xl transition duration-150 text-left space-x-3
-                                    ${isActive
-                                        ? 'bg-blue-600 text-white shadow-md' // Active: Blue BG, White Text
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600' // Hover: Light Gray BG, Blue Text
-                                    }`}
-                            >
-                                <item.icon size={20} />
-                                <span className="font-medium">{item.title}</span>
-                            </button>
-                        );
-                    })}
+                <nav className="flex-1 p-4 flex flex-col min-h-0">
+                    <div className="space-y-2 overflow-y-auto pr-1">
+                        {navItems.map((item) => {
+                            const isActive = activeTab === item.name;
+                            return (
+                                <button
+                                    key={item.name}
+                                    onClick={() => {
+                                        setActiveTab(item.name);
+                                        if (item.onClick) item.onClick();
+                                    }}
+                                    className={`w-full flex items-center p-3 rounded-xl transition duration-150 text-left space-x-3
+                                        ${isActive
+                                            ? 'bg-blue-600 text-white shadow-md' // Active: Blue BG, White Text
+                                            : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600' // Hover: Light Gray BG, Blue Text
+                                        }`}
+                                >
+                                    <item.icon size={20} />
+                                    <span className="font-medium">{item.title}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="w-full pt-2 flex justify-start flex-shrink-0">
+                        <img
+                            src="/SDC%20logo.png"
+                            alt="SDC Logo"
+                            className="w-full max-w-[180px] h-auto object-contain"
+                            onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = '/SDC logo.png';
+                            }}
+                        />
+                    </div>
                 </nav>
-                <div className="p-4 border-t">
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center p-3 rounded-xl transition duration-150 text-red-500 hover:bg-red-50"
-                    >
-                        <LogOut size={20} className="mr-3" />
-                        <span className="font-medium">Logout</span>
-                    </button>
-                </div>
             </aside>
 
             {/* Main Content Area */}
@@ -3612,14 +3676,23 @@ export default function AdminDashboard() {
                         </p>
                     </div>
 
-                    {/* Profile Panel (Top Right) - Hidden on mobile, shown on desktop */}
-                    <div className="hidden sm:flex flex-col items-end space-y-1">
-                        {/* Reverted profile avatar BG to blue */}
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md cursor-pointer hover:ring-4 ring-blue-300 transition duration-150">
-                            AD
+                    {/* Top Right Controls - Hidden on mobile, shown on desktop */}
+                    <div className="hidden sm:flex flex-col items-end gap-3">
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center px-4 py-2 rounded-xl transition duration-150 text-red-500 hover:bg-red-50 border border-red-100"
+                        >
+                            <LogOut size={18} className="mr-2" />
+                            <span className="font-medium">Logout</span>
+                        </button>
+
+                        <div className="flex flex-col items-end space-y-1">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md cursor-pointer hover:ring-4 ring-blue-300 transition duration-150">
+                                AD
+                            </div>
+                            <p className="text-xs sm:text-sm font-semibold text-gray-800">Administrator</p>
+                            <p className="text-xs text-gray-500">Admin ID: 001</p>
                         </div>
-                        <p className="text-xs sm:text-sm font-semibold text-gray-800">Administrator</p>
-                        <p className="text-xs text-gray-500">Admin ID: 001</p>
                     </div>
                 </header>
 
@@ -3648,6 +3721,7 @@ export default function AdminDashboard() {
                     ))}
                 </div>
             </nav>
+
         </div>
     );
 }

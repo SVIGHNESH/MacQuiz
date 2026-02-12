@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -87,7 +87,7 @@ const QuizTaker = () => {
                         });
                         setAnswers(restoredAnswers);
                     }
-                } catch (err) {
+                } catch (_err) {
                     // No saved answers to restore
                 }
                 
@@ -134,7 +134,6 @@ const QuizTaker = () => {
             
             // Calculate elapsed time from when student actually started
             const elapsedMs = now - startedAt;
-            const elapsedMinutes = elapsedMs / (1000 * 60);
             
             // Get the allocated duration for this student (accounts for late join penalty)
             const allocatedSeconds = calculatedDuration * 60;
@@ -147,7 +146,7 @@ const QuizTaker = () => {
             
             if (remainingSeconds === 0) {
                 clearInterval(syncInterval);
-                handleSubmit();
+                // Auto-submit will be handled by the timeRemaining==0 effect
             }
         }, 5000); // Sync every 5 seconds
 

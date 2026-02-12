@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { attemptAPI } from '../services/api';
 import {
@@ -11,7 +10,6 @@ import {
 const QuizResult = () => {
     const { attemptId } = useParams();
     const navigate = useNavigate();
-    const { user } = useAuth();
     const { error } = useToast();
 
     const [result, setResult] = useState(null);
@@ -22,7 +20,7 @@ const QuizResult = () => {
             try {
                 const data = await attemptAPI.getAttempt(attemptId);
                 setResult(data);
-            } catch (err) {
+            } catch {
                 error('Failed to load quiz result');
                 navigate('/dashboard');
             } finally {

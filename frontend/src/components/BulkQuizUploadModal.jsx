@@ -4,7 +4,6 @@ import { API_BASE_URL } from '../services/api';
 
 const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState(null);
-    const [previewData, setPreviewData] = useState([]);
     const [validationResults, setValidationResults] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -147,8 +146,6 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
         try {
             const text = await selectedFile.text();
             const { rows } = parseCSV(text);
-            
-            setPreviewData(rows);
 
             const validation = validateQuizData(rows);
             setValidationResults(validation);
@@ -173,7 +170,7 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
             
             // Group questions by quiz
             const quizzes = [];
-            Object.entries(validationResults.quizGroups).forEach(([_, questions]) => {
+            Object.entries(validationResults.quizGroups).forEach(([_quizKey, questions]) => {
                 const firstQ = questions[0];
                 const quiz = {
                     title: firstQ.quiz_title,
@@ -288,7 +285,6 @@ const BulkQuizUploadModal = ({ isOpen, onClose, onSuccess }) => {
 
     const handleClose = () => {
         setFile(null);
-        setPreviewData([]);
         setValidationResults(null);
         setShowPreview(false);
         setUploadProgress(0);
@@ -455,7 +451,7 @@ Mathematics Quiz,Algebra Basics,,45,2,0.5,50,true,Mathematics,2nd Year,Is (a + b
                                         Quizzes to be Created ({Object.keys(validationResults.quizGroups).length})
                                     </h4>
                                     <div className="space-y-3 max-h-96 overflow-y-auto">
-                                        {Object.entries(validationResults.quizGroups).map(([quizTitle, questions], idx) => (
+                                        {Object.entries(validationResults.quizGroups).map(([_quizTitle, questions], idx) => (
                                             <div key={idx} className="border-2 border-green-200 rounded-lg p-4 bg-green-50">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <h5 className="font-bold text-gray-900">{questions[0].quiz_title}</h5>

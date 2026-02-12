@@ -4,7 +4,6 @@ import { API_BASE_URL } from '../services/api';
 
 const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState(null);
-    const [previewData, setPreviewData] = useState([]);
     const [validationResults, setValidationResults] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -17,13 +16,13 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
         if (lines.length === 0) return { headers: [], rows: [] };
 
         const headers = lines[0].split(',').map(h => h.trim());
-        const rows = lines.slice(1).map((line, index) => {
+        const rows = lines.slice(1).map((line, _index) => {
             const values = line.split(',').map(v => v.trim());
             const row = {};
             headers.forEach((header, i) => {
                 row[header] = values[i] || '';
             });
-            row._rowNumber = index + 2; // +2 because header is row 1
+            row._rowNumber = _index + 2; // +2 because header is row 1
             return row;
         });
 
@@ -40,7 +39,7 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
         const fileEmails = new Set();
         const fileStudentIds = new Set();
 
-        rows.forEach((row, index) => {
+        rows.forEach((row, _index) => {
             const rowErrors = [];
             const rowWarnings = [];
             let willBeSkipped = false;
@@ -64,7 +63,7 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
 
             // Validate phone number format if provided
             if (row.phone_number && row.phone_number.trim()) {
-                const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+                const phoneRegex = /^[\d\s\-+()]+$/;
                 if (!phoneRegex.test(row.phone_number)) {
                     rowErrors.push('Invalid phone number format (use digits, spaces, +, -, ( ) only)');
                 } else if (row.phone_number.replace(/\D/g, '').length < 10) {
@@ -171,8 +170,6 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
             const text = await selectedFile.text();
             const { rows } = parseCSV(text);
             
-            setPreviewData(rows);
-
             // Fetch existing users to check for duplicates
             const token = localStorage.getItem('access_token');
             const response = await fetch(`${API_BASE_URL}/api/v1/users/`, {
@@ -253,7 +250,6 @@ const BulkUploadModal = ({ isOpen, onClose, onSuccess }) => {
 
     const handleClose = () => {
         setFile(null);
-        setPreviewData([]);
         setValidationResults(null);
         setShowPreview(false);
         setUploadProgress(0);

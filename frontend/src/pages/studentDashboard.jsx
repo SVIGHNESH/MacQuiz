@@ -506,24 +506,38 @@ const StudentDashboard = () => {
                     <p className="text-blue-100 text-sm mt-1">Student Portal</p>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-2">
-                    {navItems.map((item) => (
-                        <button
-                            key={item.name}
-                            onClick={() => setActiveTab(item.name)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-150 ${
-                                activeTab === item.name
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
-                            }`}
-                        >
-                            <item.icon size={20} />
-                            <span className="font-medium">{item.name}</span>
-                        </button>
-                    ))}
+                <nav className="flex-1 p-4 flex flex-col min-h-0">
+                    <div className="space-y-2 overflow-y-auto pr-1">
+                        {navItems.map((item) => (
+                            <button
+                                key={item.name}
+                                onClick={() => setActiveTab(item.name)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-150 ${
+                                    activeTab === item.name
+                                        ? 'bg-blue-600 text-white shadow-md'
+                                        : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                                }`}
+                            >
+                                <item.icon size={20} />
+                                <span className="font-medium">{item.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                    <div className="w-full pt-2 flex justify-start flex-shrink-0">
+                        <img
+                            src="/SDC%20logo.png"
+                            alt="SDC Logo"
+                            className="w-full max-w-[180px] h-auto object-contain"
+                            onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = '/SDC logo.png';
+                            }}
+                        />
+                    </div>
                 </nav>
 
-                <div className="p-4 border-t">
+                <div className="border-t">
+                    <div className="p-4 pt-0">
                     <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-150 text-red-500 hover:bg-red-50"
@@ -531,6 +545,7 @@ const StudentDashboard = () => {
                         <LogOut size={20} />
                         <span className="font-medium">Logout</span>
                     </button>
+                    </div>
                 </div>
             </aside>
 
@@ -577,6 +592,7 @@ const StudentDashboard = () => {
                     ))}
                 </div>
             </nav>
+
         </div>
     );
 };
