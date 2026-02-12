@@ -20,6 +20,7 @@ const QuizTaker = () => {
     const [answers, setAnswers] = useState({});
     const [timeRemaining, setTimeRemaining] = useState(null);
     const [calculatedDuration, setCalculatedDuration] = useState(null);
+    const [initialDurationSeconds, setInitialDurationSeconds] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
@@ -64,6 +65,7 @@ const QuizTaker = () => {
                 // Initialize timer immediately with calculated duration
                 const initialTimeSeconds = duration * 60;
                 setTimeRemaining(initialTimeSeconds);
+                setInitialDurationSeconds(initialTimeSeconds);
                 
                 // Start attempt (will return existing if in progress)
                 const attemptData = await attemptAPI.startAttempt(quizId);
@@ -75,6 +77,22 @@ const QuizTaker = () => {
                 }
                 
                 setAttempt(attemptData);
+
+                // Server-authoritative timer sync (source of truth)
+                try {
+                    const remainingData = await attemptAPI.getRemainingTime(attemptData.id);
+                    if (remainingData?.remaining_seconds !== null && remainingData?.remaining_seconds !== undefined) {
+                        setTimeRemaining(remainingData.remaining_seconds);
+                        if (remainingData.remaining_seconds > 0) {
+                            setInitialDurationSeconds((prev) => {
+                                if (prev === null) return remainingData.remaining_seconds;
+                                return Math.max(prev, remainingData.remaining_seconds);
+                            });
+                        }
+                    }
+                } catch (syncErr) {
+                    console.error('Initial timer sync failed:', syncErr);
+                }
                 
                 // Restore saved answers if this is a reconnection
                 let savedAnswersData = null;
@@ -121,37 +139,39 @@ const QuizTaker = () => {
         initQuiz();
     }, [quizId]);
 
-    // Sync timer for live sessions (handles reconnections)
+    // Periodic server timer sync (authoritative for live and regular timed quizzes)
     useEffect(() => {
-        if (!quiz?.is_live_session || !attempt?.id || !attempt?.started_at || !calculatedDuration) {
+        if (!attempt?.id || isLoading) {
             return;
         }
 
-        // Sync time every 5 seconds to handle reconnections accurately
-        const syncInterval = setInterval(() => {
-            const now = new Date();
-            const startedAt = new Date(attempt.started_at);
-            
-            // Calculate elapsed time from when student actually started
-            const elapsedMs = now - startedAt;
-            
-            // Get the allocated duration for this student (accounts for late join penalty)
-            const allocatedSeconds = calculatedDuration * 60;
-            
-            // Calculate remaining time
-            const remainingSeconds = Math.max(0, Math.floor(allocatedSeconds - (elapsedMs / 1000)));
-            
-            // Update time remaining based on actual elapsed time since student started
-            setTimeRemaining(remainingSeconds);
-            
-            if (remainingSeconds === 0) {
-                clearInterval(syncInterval);
-                // Auto-submit will be handled by the timeRemaining==0 effect
+        const syncRemainingTime = async () => {
+            try {
+                const remainingData = await attemptAPI.getRemainingTime(attempt.id);
+                if (remainingData?.remaining_seconds !== null && remainingData?.remaining_seconds !== undefined) {
+                    setTimeRemaining(remainingData.remaining_seconds);
+                    if (remainingData.remaining_seconds > 0) {
+                        setInitialDurationSeconds((prev) => {
+                            if (prev === null) return remainingData.remaining_seconds;
+                            return Math.max(prev, remainingData.remaining_seconds);
+                        });
+                    }
+                }
+            } catch (syncErr) {
+                console.error('Timer sync failed:', syncErr);
             }
-        }, 5000); // Sync every 5 seconds
+        };
+
+        // immediate sync once
+        syncRemainingTime();
+
+        // sync every 10s to keep time exact with backend/live session
+        const syncInterval = setInterval(() => {
+            syncRemainingTime();
+        }, 10000);
 
         return () => clearInterval(syncInterval);
-    }, [quiz, attempt, calculatedDuration]);
+    }, [attempt?.id, isLoading]);
 
     // Timer countdown
     useEffect(() => {
@@ -258,7 +278,9 @@ const QuizTaker = () => {
     const currentQuestion = quiz?.questions?.[currentQuestionIndex];
     const totalQuestions = quiz?.questions?.length || 0;
     const answeredCount = Object.keys(answers).length;
-    const timePercentage = (calculatedDuration && timeRemaining !== null) ? (timeRemaining / (calculatedDuration * 60)) * 100 : 100;
+    const timePercentage = (initialDurationSeconds && timeRemaining !== null)
+        ? (timeRemaining / initialDurationSeconds) * 100
+        : ((calculatedDuration && timeRemaining !== null) ? (timeRemaining / (calculatedDuration * 60)) * 100 : 100);
 
     // Show warning if time has expired
     if (timeRemaining !== null && timeRemaining === 0 && !isSubmitting && attempt?.id) {

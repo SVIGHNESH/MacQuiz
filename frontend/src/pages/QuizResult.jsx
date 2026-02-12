@@ -46,6 +46,10 @@ const QuizResult = () => {
     const percentage = result?.percentage || 0;
     const grade = getGradeFromPercentage(percentage);
     const passed = grade !== 'F' && grade !== 'N/A';
+    const correctAnswers = result?.correct_answers || 0;
+    const totalQuestions = result?.total_questions || 0;
+    const accuracy = totalQuestions > 0 ? ((correctAnswers / totalQuestions) * 100) : 0;
+    const hasScoreAccuracyGap = Math.abs(accuracy - percentage) >= 5;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8">
@@ -133,7 +137,7 @@ const QuizResult = () => {
                             <div>
                                 <div className="text-sm text-gray-500">Correct Answers</div>
                                 <div className="text-2xl font-bold text-gray-900">
-                                    {result?.correct_answers || 0} / {result?.total_questions || 0}
+                                    {correctAnswers} / {totalQuestions}
                                 </div>
                             </div>
                         </div>
@@ -145,7 +149,7 @@ const QuizResult = () => {
                             <div>
                                 <div className="text-sm text-gray-500">Wrong Answers</div>
                                 <div className="text-2xl font-bold text-gray-900">
-                                    {(result?.total_questions || 0) - (result?.correct_answers || 0)}
+                                    {totalQuestions - correctAnswers}
                                 </div>
                             </div>
                         </div>
@@ -169,12 +173,19 @@ const QuizResult = () => {
                             <div>
                                 <div className="text-sm text-gray-500">Accuracy</div>
                                 <div className="text-2xl font-bold text-gray-900">
-                                    {result?.correct_answers ? 
-                                        ((result.correct_answers / result.total_questions) * 100).toFixed(1) : 0}%
+                                    {accuracy.toFixed(1)}%
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    {hasScoreAccuracyGap && (
+                        <div className="mt-6 p-4 rounded-xl border border-amber-200 bg-amber-50">
+                            <p className="text-sm text-amber-900">
+                                <strong>Note:</strong> Percentage is based on <strong>marks after negative marking</strong>, while Accuracy is based on correct answers only.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Performance Message */}
