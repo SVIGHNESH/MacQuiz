@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -10,24 +10,6 @@ import QuizTaker from "./pages/QuizTaker";
 import QuizResult from "./pages/QuizResult";
 
 export default function App() {
-  useEffect(() => {
-    const applyMode = (mode) => {
-      document.documentElement.classList.toggle("theme-dark", mode === "dark");
-    };
-
-    const savedMode = localStorage.getItem("macquiz_color_mode") || "light";
-    applyMode(savedMode);
-
-    const onStorage = (event) => {
-      if (event.key === "macquiz_color_mode") {
-        applyMode(event.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
   return (
     <BrowserRouter>
       <AuthProvider>
