@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { quizAPI } from '../services/api';
@@ -7,11 +7,12 @@ import {
     FileText, Clock, Award, AlertCircle, CheckCircle
 } from 'lucide-react';
 
-const QuizCreator = ({ embedded = false, onDone }) => {
+const QuizCreator = ({ embedded = false, onDone, quizIdOverride = null }) => {
     const navigate = useNavigate();
     const { quizId } = useParams();
     const { success, error } = useToast();
-    const isEditMode = !!quizId;
+    const effectiveQuizId = quizIdOverride ?? quizId;
+    const isEditMode = !!effectiveQuizId;
     
     const [quizData, setQuizData] = useState({
         title: '',
@@ -41,17 +42,10 @@ const QuizCreator = ({ embedded = false, onDone }) => {
     const [editingIndex, setEditingIndex] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Load quiz data in edit mode
-    useEffect(() => {
-        if (isEditMode) {
-            loadQuizData();
-        }
-    }, [quizId]);
-
-    const loadQuizData = async () => {
+    const loadQuizData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const quiz = await quizAPI.getQuiz(quizId);
+            const quiz = await quizAPI.getQuiz(effectiveQuizId);
             setQuizData({
                 title: quiz.title || '',
                 description: quiz.description || '',
@@ -70,7 +64,14 @@ const QuizCreator = ({ embedded = false, onDone }) => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [effectiveQuizId, error, navigate]);
+
+    // Load quiz data in edit mode
+    useEffect(() => {
+        if (isEditMode) {
+            loadQuizData();
+        }
+    }, [isEditMode, loadQuizData]);
 
     const departments = [
         'Computer Science Engg.',
@@ -229,7 +230,7 @@ const QuizCreator = ({ embedded = false, onDone }) => {
             }
 
             if (isEditMode) {
-                await quizAPI.updateQuiz(quizId, payload);
+                await quizAPI.updateQuiz(effectiveQuizId, payload);
                 success('Quiz updated successfully!');
             } else {
                 const createdQuiz = await quizAPI.createQuiz(payload);

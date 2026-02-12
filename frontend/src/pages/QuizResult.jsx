@@ -31,7 +31,7 @@ const QuizResult = () => {
         };
 
         fetchResult();
-    }, [attemptId]);
+    }, [attemptId, error, navigate]);
 
     if (isLoading) {
         return (

@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+.hide-password-reveal::-ms-reveal,
+.hide-password-reveal::-ms-clear {
+	display: none;
+}

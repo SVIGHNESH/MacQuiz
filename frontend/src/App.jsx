@@ -4,7 +4,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { ProtectedRoute, PublicRoute } from "./components/ProtectedRoute";
 import Login from "./pages/login";
-import GlobalDashboard from "./pages/GlobalDashboard";
+import AdminDashboard from "./pages/dashBoard";
 import QuizCreator from "./pages/QuizCreator";
 import QuizTaker from "./pages/QuizTaker";
 import QuizResult from "./pages/QuizResult";
@@ -24,7 +24,7 @@ export default function App() {
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <GlobalDashboard />
+                  <AdminDashboard />
                 </ProtectedRoute>
               } 
             />
@@ -33,7 +33,7 @@ export default function App() {
               path="/student-dashboard" 
               element={
                 <ProtectedRoute>
-                  <GlobalDashboard />
+                  <AdminDashboard />
                 </ProtectedRoute>
               } 
             />

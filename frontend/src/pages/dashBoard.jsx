@@ -11,7 +11,7 @@ import QuizCreator from "./QuizCreator";
 import {
     LayoutDashboard, Users, Zap, FileText, Settings, LogOut, CheckCircle, Clock,
     TrendingUp, TrendingDown, ClipboardList, BarChart3, Search, Plus, X, List, Save, UserCheck, Calendar, Upload,
-    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award, ChevronDown
+    Eye, EyeOff, RefreshCw, Key, ShieldCheck, AlertTriangle, AlertCircle, GraduationCap, XCircle, Trophy, Download, FileSpreadsheet, Code2, Award, ChevronDown, Copy, Palette
 } from 'lucide-react';
 
 // No mock data needed - all data fetched from API
@@ -325,6 +325,20 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
         success('Strong password generated! Make sure to copy it.');
     };
 
+    const handleCopyPassword = async () => {
+        if (!formData.password) {
+            error('Enter or generate a password first.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(formData.password);
+            success('Password copied to clipboard.');
+        } catch (_err) {
+            error('Unable to copy password. Please copy it manually.');
+        }
+    };
+
     const handleBulkUploadSuccess = (result) => {
         success(`Successfully created ${result.created_count} users!`);
         
@@ -634,7 +648,7 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
                                 disabled={isSubmitting}
                                 autoComplete="new-password"
                                 placeholder="Set temporary password"
-                                className="w-full p-3 pr-24 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                                className="hide-password-reveal w-full p-3 pr-36 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                             />
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
                                 <button
@@ -653,6 +667,15 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
                                     title="Generate strong password"
                                 >
                                     <RefreshCw size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyPassword}
+                                    disabled={isSubmitting || !formData.password}
+                                    className="p-2 text-green-600 hover:text-green-700 transition disabled:opacity-50"
+                                    title="Copy password"
+                                >
+                                    <Copy size={18} />
                                 </button>
                             </div>
                         </div>
@@ -807,6 +830,20 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
         setFormData({ ...formData, password: newPassword });
         setPasswordStrength(validatePasswordStrength(newPassword));
         success('Strong password generated! Make sure to copy it.');
+    };
+
+    const handleCopyPassword = async () => {
+        if (!formData.password) {
+            error('Enter or generate a password first.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(formData.password);
+            success('Password copied to clipboard.');
+        } catch (_err) {
+            error('Unable to copy password. Please copy it manually.');
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -1002,8 +1039,11 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
                         {showPasswordSection && (
                             <div className="space-y-3">
                                 <label className="block text-sm font-medium text-gray-700">
-                                    New Password (Optional)
+                                    New Password
                                 </label>
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                                    Current password cannot be shown. Passwords are stored securely and only a new password can be set.
+                                </p>
                                 <div className="relative">
                                     <input 
                                         type={showPassword ? "text" : "password"}
@@ -1013,7 +1053,7 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
                                         disabled={isSubmitting}
                                         autoComplete="new-password"
                                         placeholder="Enter new password"
-                                        className="w-full p-3 pr-24 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
+                                        className="hide-password-reveal w-full p-3 pr-36 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                                     />
                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
                                         <button
@@ -1032,6 +1072,15 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
                                             title="Generate strong password"
                                         >
                                             <RefreshCw size={18} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyPassword}
+                                            disabled={isSubmitting || !formData.password}
+                                            className="p-2 text-green-600 hover:text-green-700 transition disabled:opacity-50"
+                                            title="Copy password"
+                                        >
+                                            <Copy size={18} />
                                         </button>
                                     </div>
                                 </div>
@@ -1592,7 +1641,7 @@ const DetailedReportsTool = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [error]);
 
     // Calculate semester options based on year
     const availableSemesters = useMemo(() => {
@@ -1891,13 +1940,7 @@ const TeacherStudentsView = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
 
-    useEffect(() => {
-        if (!showAddForm) {
-            fetchTeacherStudents();
-        }
-    }, [showAddForm]);
-
-    const fetchTeacherStudents = async () => {
+    const fetchTeacherStudents = useCallback(async () => {
         setIsLoading(true);
         try {
             // Get all users
@@ -1912,7 +1955,13 @@ const TeacherStudentsView = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [error]);
+
+    useEffect(() => {
+        if (!showAddForm) {
+            fetchTeacherStudents();
+        }
+    }, [showAddForm, fetchTeacherStudents]);
 
     const handleUserCreated = () => {
         setShowAddForm(false);
@@ -2004,12 +2053,9 @@ const TeacherQuizManagement = () => {
     const [assignQuizModal, setAssignQuizModal] = useState({ open: false, quiz: null });
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [showCreateQuizInline, setShowCreateQuizInline] = useState(false);
+    const [inlineEditQuizId, setInlineEditQuizId] = useState(null);
 
-    useEffect(() => {
-        fetchQuizzes();
-    }, [refreshTrigger]);
-
-    const fetchQuizzes = async () => {
+    const fetchQuizzes = useCallback(async () => {
         setIsLoading(true);
         try {
             console.log('Fetching quizzes...');
@@ -2026,7 +2072,11 @@ const TeacherQuizManagement = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [error]);
+
+    useEffect(() => {
+        fetchQuizzes();
+    }, [refreshTrigger, fetchQuizzes]);
 
     const handleDeleteQuiz = async (quizId) => {
         if (!window.confirm('Are you sure you want to delete this quiz?')) return;
@@ -2077,19 +2127,24 @@ const TeacherQuizManagement = () => {
         setRefreshTrigger(prev => prev + 1);
     };
 
-    if (showCreateQuizInline) {
+    if (showCreateQuizInline || inlineEditQuizId) {
         return (
             <div className="space-y-4">
                 <button
-                    onClick={() => setShowCreateQuizInline(false)}
+                    onClick={() => {
+                        setShowCreateQuizInline(false);
+                        setInlineEditQuizId(null);
+                    }}
                     className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition"
                 >
                     ← Back to Quiz Management
                 </button>
                 <QuizCreator
                     embedded
+                    quizIdOverride={inlineEditQuizId}
                     onDone={() => {
                         setShowCreateQuizInline(false);
+                        setInlineEditQuizId(null);
                         setRefreshTrigger(prev => prev + 1);
                     }}
                 />
@@ -2121,7 +2176,10 @@ const TeacherQuizManagement = () => {
                             Bulk Upload
                         </button>
                         <button
-                            onClick={() => setShowCreateQuizInline(true)}
+                            onClick={() => {
+                                setInlineEditQuizId(null);
+                                setShowCreateQuizInline(true);
+                            }}
                             className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
                         >
                             <Plus size={20} className="mr-2" />
@@ -2141,7 +2199,10 @@ const TeacherQuizManagement = () => {
                         <h3 className="text-xl font-semibold text-gray-600 mb-2">No Quizzes Yet</h3>
                         <p className="text-gray-500 mb-6">Start by creating your first quiz for students</p>
                         <button
-                            onClick={() => setShowCreateQuizInline(true)}
+                            onClick={() => {
+                                setInlineEditQuizId(null);
+                                setShowCreateQuizInline(true);
+                            }}
                             className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition shadow-lg"
                         >
                             <Plus size={20} className="mr-2" />
@@ -2216,7 +2277,10 @@ const TeacherQuizManagement = () => {
                                             Preview
                                         </button>
                                         <button 
-                                            onClick={() => navigate(`/quiz/edit/${quiz.id}`)}
+                                            onClick={() => {
+                                                setShowCreateQuizInline(false);
+                                                setInlineEditQuizId(quiz.id);
+                                            }}
                                             className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition text-sm"
                                         >
                                             Edit
@@ -2266,11 +2330,7 @@ const AdminQuizMonitoring = () => {
     const [filterTeacher, setFilterTeacher] = useState('all');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-    useEffect(() => {
-        fetchData();
-    }, [refreshTrigger]);
-
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setIsLoading(true);
         try {
             const [quizzesData, usersData] = await Promise.all([
@@ -2287,7 +2347,11 @@ const AdminQuizMonitoring = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [error]);
+
+    useEffect(() => {
+        fetchData();
+    }, [refreshTrigger, fetchData]);
 
     const teachers = users.filter(u => u.role === 'teacher');
     const filteredQuizzes = filterTeacher === 'all' 
@@ -3049,25 +3113,7 @@ const StudentResultsView = () => {
     const [liveQuizFocus, setLiveQuizFocus] = useState('all');
     const [refreshKey, setRefreshKey] = useState(0);
 
-    useEffect(() => {
-        fetchAllData();
-    }, [refreshKey]);
-
-    useEffect(() => {
-        const liveRefresh = setInterval(() => {
-            setRefreshKey(prev => prev + 1);
-        }, 10000);
-
-        return () => clearInterval(liveRefresh);
-    }, []);
-
-    useEffect(() => {
-        const onFocus = () => setRefreshKey(prev => prev + 1);
-        window.addEventListener('focus', onFocus);
-        return () => window.removeEventListener('focus', onFocus);
-    }, []);
-
-    const fetchAllData = async () => {
+    const fetchAllData = useCallback(async () => {
         setIsLoading(true);
         try {
             // Fetch each resource individually to identify which one fails
@@ -3124,7 +3170,25 @@ const StudentResultsView = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [error]);
+
+    useEffect(() => {
+        fetchAllData();
+    }, [refreshKey, fetchAllData]);
+
+    useEffect(() => {
+        const liveRefresh = setInterval(() => {
+            setRefreshKey(prev => prev + 1);
+        }, 10000);
+
+        return () => clearInterval(liveRefresh);
+    }, []);
+
+    useEffect(() => {
+        const onFocus = () => setRefreshKey(prev => prev + 1);
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, []);
 
     // Filter attempts
     const filteredAttempts = attempts.filter(attempt => {
@@ -3135,6 +3199,7 @@ const StudentResultsView = () => {
 
     const liveAttempts = filteredAttempts.filter(attempt => !attempt.is_completed);
     const completedAttempts = filteredAttempts.filter(attempt => attempt.is_completed);
+    const activeLiveQuizzes = quizzes.filter((quiz) => quiz?.is_live_session && quiz?.is_active);
     const focusedLiveAttempts = liveAttempts.filter((attempt) => {
         if (liveQuizFocus === 'all') return true;
         return attempt.quiz_id === parseInt(liveQuizFocus);
@@ -3269,6 +3334,25 @@ const StudentResultsView = () => {
                     <span className="text-xs text-red-700 bg-red-100 px-2 py-1 rounded-full">Auto-refresh: 10s</span>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                    <div className="bg-white border border-red-200 rounded-lg px-3 py-2">
+                        <p className="text-xs text-red-700">Active Live Quizzes</p>
+                        <p className="text-lg font-bold text-red-900">{activeLiveQuizzes.length}</p>
+                    </div>
+                    <div className="bg-white border border-red-200 rounded-lg px-3 py-2">
+                        <p className="text-xs text-red-700">Students In Progress</p>
+                        <p className="text-lg font-bold text-red-900">{liveAttempts.length}</p>
+                    </div>
+                    <div className="bg-white border border-red-200 rounded-lg px-3 py-2">
+                        <p className="text-xs text-red-700">Selected Monitor Rows</p>
+                        <p className="text-lg font-bold text-red-900">{focusedLiveAttempts.length}</p>
+                    </div>
+                </div>
+
+                <p className="text-xs text-red-800 mb-3">
+                    Live monitor tracks only students who are currently <strong>in progress</strong>; completed attempts are shown in the results table below.
+                </p>
+
                 <div className="mb-3 max-w-sm">
                     <label className="block text-xs font-medium text-red-800 mb-1">Focus by Quiz</label>
                     <select
@@ -3277,7 +3361,7 @@ const StudentResultsView = () => {
                         className="w-full px-3 py-2 border border-red-200 rounded-lg bg-white text-sm focus:ring-2 focus:ring-red-300 focus:border-red-300"
                     >
                         <option value="all">All Live Quizzes</option>
-                        {quizzes.map(quiz => (
+                        {activeLiveQuizzes.map(quiz => (
                             <option key={quiz.id} value={quiz.id}>{quiz.title}</option>
                         ))}
                     </select>
@@ -3634,7 +3718,12 @@ export default function AdminDashboard() {
     const [statsRefresh, setStatsRefresh] = useState(0);
     const [statsData, setStatsData] = useState(null);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const [uiTheme, setUiTheme] = useState(() => localStorage.getItem('macquiz_ui_theme') || 'classic');
     const profileMenuRef = useRef(null);
+
+    useEffect(() => {
+        localStorage.setItem('macquiz_ui_theme', uiTheme);
+    }, [uiTheme]);
 
     const fetchDashboardStats = useCallback(async () => {
         setStatsLoading(true);
@@ -4026,10 +4115,12 @@ export default function AdminDashboard() {
         </div>
     );
 
+    const isSoftTheme = uiTheme === 'soft';
+
     return (
-        <div className="min-h-screen flex flex-col lg:flex-row bg-gray-50 font-inter">
+        <div className={`min-h-screen flex flex-col lg:flex-row font-inter ${isSoftTheme ? 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50' : 'bg-gray-50'}`}>
             {/* Mobile Header */}
-            <div className="lg:hidden bg-white border-b shadow-md p-4 flex items-center justify-between sticky top-0 z-30">
+            <div className={`lg:hidden border-b shadow-md p-4 flex items-center justify-between sticky top-0 z-30 ${isSoftTheme ? 'bg-white/95 backdrop-blur-sm' : 'bg-white'}`}>
                 <div className="flex items-center space-x-2">
                     <button
                         onClick={() => setActiveTab('Dashboard')}
@@ -4041,16 +4132,25 @@ export default function AdminDashboard() {
                         {roleLabel}
                     </span>
                 </div>
-                <button
-                    onClick={handleLogout}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                >
-                    <LogOut size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setUiTheme(prev => prev === 'classic' ? 'soft' : 'classic')}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                        title={`Switch to ${isSoftTheme ? 'Classic' : 'Soft'} theme`}
+                    >
+                        <Palette size={18} />
+                    </button>
+                    <button
+                        onClick={handleLogout}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                    >
+                        <LogOut size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* Sidebar Navigation */}
-            <aside className="hidden lg:flex w-64 flex-col fixed inset-y-0 bg-white border-r shadow-lg z-20">
+            <aside className={`hidden lg:flex w-64 flex-col fixed inset-y-0 border-r shadow-lg z-20 ${isSoftTheme ? 'bg-white/90 backdrop-blur-sm' : 'bg-white'}`}>
                 <div className="p-6 text-2xl font-extrabold text-blue-700 border-b">
                     MacQuiz <span className="text-gray-400 font-light">
                         {portalLabel}
@@ -4098,7 +4198,15 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Profile Dropdown - Hidden on mobile, shown on desktop */}
-                    <div className="hidden sm:flex items-start" ref={profileMenuRef}>
+                    <div className="hidden sm:flex items-start gap-2" ref={profileMenuRef}>
+                        <button
+                            onClick={() => setUiTheme(prev => prev === 'classic' ? 'soft' : 'classic')}
+                            className="h-12 px-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-100 text-indigo-600 transition duration-150 flex items-center gap-2"
+                            title={`Switch to ${isSoftTheme ? 'Classic' : 'Soft'} theme`}
+                        >
+                            <Palette size={16} />
+                            <span className="text-xs font-medium">{isSoftTheme ? 'Classic' : 'Soft'}</span>
+                        </button>
                         <div className="relative">
                             <button
                                 onClick={() => setIsProfileMenuOpen(prev => !prev)}

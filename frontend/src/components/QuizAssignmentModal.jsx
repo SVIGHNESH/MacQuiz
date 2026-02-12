@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Users, UserCheck, Search, Filter, Check, Calendar, Clock } from 'lucide-react';
 import { userAPI, API_BASE_URL } from '../services/api';
 
@@ -13,29 +13,7 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
     const [isLiveSession, setIsLiveSession] = useState(false);
     const [liveStartTime, setLiveStartTime] = useState('');
 
-    useEffect(() => {
-        if (isOpen && quiz) {
-            // Reset states when opening modal
-            setSearchQuery('');
-            setFilterDepartment('all');
-            setFilterYear('all');
-            
-            fetchStudents();
-            loadAssignedStudents();
-            loadLiveSessionSettings();
-        } else {
-            // Clear all states when closing modal
-            setSelectedStudents([]);
-            setIsLiveSession(false);
-            setLiveStartTime('');
-        }
-    }, [isOpen, quiz]);
-
-    useEffect(() => {
-        filterStudentsList();
-    }, [students, searchQuery, filterDepartment, filterYear]);
-
-    const fetchStudents = async () => {
+    const fetchStudents = useCallback(async () => {
         setIsLoading(true);
         try {
             const allUsers = await userAPI.getAllUsers();
@@ -46,9 +24,14 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
-    const loadAssignedStudents = async () => {
+    const loadAssignedStudents = useCallback(async () => {
+        if (!quiz?.id) {
+            setSelectedStudents([]);
+            return;
+        }
+
         // Load currently assigned students from backend
         try {
             const response = await fetch(`${API_BASE_URL}/api/v1/quizzes/${quiz.id}/assignments`, {
@@ -70,9 +53,9 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
             console.error('Failed to load assigned students:', err);
             setSelectedStudents([]);
         }
-    };
+    }, [quiz?.id]);
 
-    const loadLiveSessionSettings = () => {
+    const loadLiveSessionSettings = useCallback(() => {
         try {
             // Check if quiz already has live session data from backend
             if (quiz.is_live_session && quiz.live_start_time) {
@@ -93,9 +76,9 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
             setIsLiveSession(false);
             setLiveStartTime('');
         }
-    };
+    }, [quiz]);
 
-    const filterStudentsList = () => {
+    const filterStudentsList = useCallback(() => {
         let filtered = [...students];
 
         if (searchQuery) {
@@ -117,7 +100,29 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
         }
 
         setFilteredStudents(filtered);
-    };
+    }, [students, searchQuery, filterDepartment, filterYear]);
+
+    useEffect(() => {
+        if (isOpen && quiz) {
+            // Reset states when opening modal
+            setSearchQuery('');
+            setFilterDepartment('all');
+            setFilterYear('all');
+            
+            fetchStudents();
+            loadAssignedStudents();
+            loadLiveSessionSettings();
+        } else {
+            // Clear all states when closing modal
+            setSelectedStudents([]);
+            setIsLiveSession(false);
+            setLiveStartTime('');
+        }
+    }, [isOpen, quiz, fetchStudents, loadAssignedStudents, loadLiveSessionSettings]);
+
+    useEffect(() => {
+        filterStudentsList();
+    }, [filterStudentsList]);
 
     const handleToggleStudent = (studentId) => {
         setSelectedStudents(prev =>

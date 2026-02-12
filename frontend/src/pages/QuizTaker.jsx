@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -137,7 +137,7 @@ const QuizTaker = () => {
         };
 
         initQuiz();
-    }, [quizId]);
+    }, [quizId, user?.role, error, navigate, success]);
 
     // Periodic server timer sync (authoritative for live and regular timed quizzes)
     useEffect(() => {
@@ -195,51 +195,9 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [quiz, attempt, isLoading]);
+    }, [quiz, attempt, isLoading, timeRemaining]);
 
-    // Auto-submit when timer reaches 0
-    const hasAutoSubmitted = useRef(false);
-    useEffect(() => {
-        if (timeRemaining === 0 && timeRemaining !== null && attempt?.id && quiz && !isSubmitting && !hasAutoSubmitted.current) {
-            hasAutoSubmitted.current = true;
-            handleSubmitQuiz(true);
-        }
-    }, [timeRemaining, attempt, quiz, isSubmitting]);
-
-    const formatTime = (seconds) => {
-        if (seconds === null) return '--:--';
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handleAnswerSelect = async (questionId, answer) => {
-        // Prevent answer changes when time has expired
-        if (timeRemaining !== null && timeRemaining <= 0) {
-            error('Time has expired! Please wait while we submit your quiz.');
-            return;
-        }
-        
-        setAnswers({
-            ...answers,
-            [questionId]: answer
-        });
-        
-        // Auto-save answer to backend (for refresh protection)
-        if (attempt?.id) {
-            try {
-                await attemptAPI.saveAnswer(attempt.id, {
-                    question_id: questionId,
-                    answer_text: answer
-                });
-            } catch (err) {
-                console.error('Failed to auto-save answer:', err);
-                // Don't show error to user, just log it
-            }
-        }
-    };
-
-    const handleSubmitQuiz = async (autoSubmit = false) => {
+    const handleSubmitQuiz = useCallback(async (autoSubmit = false) => {
         if (!autoSubmit && !showSubmitConfirm) {
             setShowSubmitConfirm(true);
             return;
@@ -272,6 +230,48 @@ const QuizTaker = () => {
             setShowSubmitConfirm(false);
         } finally {
             setIsSubmitting(false);
+        }
+    }, [answers, attempt, showSubmitConfirm, error, navigate, success]);
+
+    // Auto-submit when timer reaches 0
+    const hasAutoSubmitted = useRef(false);
+    useEffect(() => {
+        if (timeRemaining === 0 && timeRemaining !== null && attempt?.id && quiz && !isSubmitting && !hasAutoSubmitted.current) {
+            hasAutoSubmitted.current = true;
+            handleSubmitQuiz(true);
+        }
+    }, [timeRemaining, attempt, quiz, isSubmitting, handleSubmitQuiz]);
+
+    const formatTime = (seconds) => {
+        if (seconds === null) return '--:--';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleAnswerSelect = async (questionId, answer) => {
+        // Prevent answer changes when time has expired
+        if (timeRemaining !== null && timeRemaining <= 0) {
+            error('Time has expired! Please wait while we submit your quiz.');
+            return;
+        }
+        
+        setAnswers({
+            ...answers,
+            [questionId]: answer
+        });
+        
+        // Auto-save answer to backend (for refresh protection)
+        if (attempt?.id) {
+            try {
+                await attemptAPI.saveAnswer(attempt.id, {
+                    question_id: questionId,
+                    answer_text: answer
+                });
+            } catch (err) {
+                console.error('Failed to auto-save answer:', err);
+                // Don't show error to user, just log it
+            }
         }
     };
 
