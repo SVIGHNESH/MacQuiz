@@ -79,6 +79,19 @@ const validateEmailDomain = (email) => {
     return allowedDomains.includes(domain);
 };
 
+const getDisplayUserId = (user) => {
+    if (!user) return 'N/A';
+    if (user.role === 'student') return user.student_id || `STU-${user.id ?? 'N/A'}`;
+    if (user.role === 'teacher') {
+        if (user.student_id) return user.student_id;
+        const numericId = Number(user.id);
+        return Number.isFinite(numericId)
+            ? `RBMI-T-${String(numericId).padStart(4, '0')}`
+            : 'RBMI-T-0000';
+    }
+    return `ADM-${user.id ?? 'N/A'}`;
+};
+
 
 /**
  * --- UTILITY COMPONENTS ---
@@ -266,7 +279,7 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
         email: '',
         password: '',
         phone_number: '', // New phone number field
-        student_id: '', // Specific to student
+        student_id: '', // Used for student roll no. and teacher ID
         department: '',
         class_year: '1st Year'
     });
@@ -381,8 +394,8 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
                 phone_number: formData.phone_number || null, // Add phone number
             };
 
-            // Add student_id only for students
-            if (formData.role.toLowerCase() === 'student') {
+            // Add identifier for students and teachers
+            if (['student', 'teacher'].includes(formData.role.toLowerCase())) {
                 userData.student_id = formData.student_id;
             }
 
@@ -414,7 +427,7 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
             
         } catch (err) {
             if (err.status === 400) {
-                error(err.data?.detail || "Email or Student ID already exists!");
+                error(err.data?.detail || "Email or User ID already exists!");
             } else if (err.status === 401 || err.status === 403) {
                 error("You don't have permission to create users. Please login as admin.");
             } else {
@@ -500,19 +513,21 @@ const UserCreationForm = ({ onCancel, onUserCreated, currentUserRole }) => {
                     </div>
                 )}
 
-                {/* Student ID field (shown first for students) */}
-                {formData.role === 'student' && (
+                {/* User ID field (shown first for students/teachers) */}
+                {(formData.role === 'student' || formData.role === 'teacher') && (
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Roll No. / Student ID (Required)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {formData.role === 'student' ? 'Roll No. / Student ID (Required)' : 'Teacher ID (Required)'}
+                        </label>
                         <input 
                             type="text" 
                             name="student_id" 
                             value={formData.student_id} 
                             onChange={handleInputChange} 
-                            required={formData.role === 'student'} 
+                            required={formData.role === 'student' || formData.role === 'teacher'} 
                             disabled={isSubmitting}
                             autoComplete="off"
-                            placeholder="e.g., CS2024001"
+                            placeholder={formData.role === 'student' ? 'e.g., CS2024001' : 'e.g., TCH001'}
                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100" 
                         />
                     </div>
@@ -799,6 +814,7 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         email: user.email || '',
+        student_id: user.student_id || '',
         phone_number: user.phone_number || '',
         department: user.department || '',
         class_year: user.class_year || '',
@@ -861,6 +877,7 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
             const updateData = {
                 first_name: formData.first_name,
                 last_name: formData.last_name,
+                student_id: ['student', 'teacher'].includes(user.role) ? (formData.student_id || null) : null,
                 phone_number: formData.phone_number || null,
                 department: formData.department || null,
                 class_year: formData.class_year || null,
@@ -959,6 +976,24 @@ const EditUserModal = ({ user, onClose, onSuccess }) => {
                             />
                         </div>
                     </div>
+
+                    {/* Teacher/Student ID */}
+                    {['student', 'teacher'].includes(user.role) && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                {user.role === 'student' ? 'Roll No. / Student ID' : 'Teacher ID'}
+                            </label>
+                            <input
+                                type="text"
+                                name="student_id"
+                                value={formData.student_id}
+                                onChange={handleInputChange}
+                                disabled={isSubmitting}
+                                placeholder={user.role === 'student' ? 'e.g., CS2024001' : 'e.g., TCH001'}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                            />
+                        </div>
+                    )}
 
                     {/* Phone Number */}
                     <div>
@@ -1276,7 +1311,7 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
@@ -1299,7 +1334,7 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.department || '-'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.student_id || '-'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getDisplayUserId(user)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -1378,7 +1413,8 @@ const UserActivityTable = ({ userType }) => {
         const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
         const nameMatch = fullName.includes(searchLower);
         const emailMatch = user.email.toLowerCase().includes(searchLower);
-        const idMatch = user.student_id ? user.student_id.toLowerCase().includes(searchLower) : false;
+        const displayId = getDisplayUserId(user).toLowerCase();
+        const idMatch = displayId.includes(searchLower);
 
         return nameMatch || emailMatch || idMatch;
     });
@@ -1405,7 +1441,7 @@ const UserActivityTable = ({ userType }) => {
         // Prepare CSV headers with all details
         const headers = userType === 'Students' 
             ? ['Sr. No.', 'Student ID', 'First Name', 'Last Name', 'Email', 'Phone Number', 'Department', 'Class/Year', 'Role', 'Created At', 'Last Active', 'Status']
-            : ['Sr. No.', 'First Name', 'Last Name', 'Email', 'Phone Number', 'Department', 'Role', 'Created At', 'Last Active', 'Status'];
+            : ['Sr. No.', 'Teacher ID', 'First Name', 'Last Name', 'Email', 'Phone Number', 'Department', 'Role', 'Created At', 'Last Active', 'Status'];
 
         // Prepare CSV rows with complete information
         const rows = filteredData.map((user, index) => {
@@ -1433,6 +1469,7 @@ const UserActivityTable = ({ userType }) => {
             // For teachers
             return [
                 index + 1,
+                getDisplayUserId(user),
                 user.first_name,
                 user.last_name,
                 user.email,
@@ -1475,7 +1512,7 @@ const UserActivityTable = ({ userType }) => {
                 <div className="relative w-full">
                     <input
                         type="text"
-                        placeholder={`Search ${userType} by Name${userType === 'Students' ? ', Roll No.' : ''} or Email...`}
+                        placeholder={`Search ${userType} by Name${userType === 'Students' ? ', Roll No.' : ', Teacher ID'} or Email...`}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
@@ -1514,6 +1551,7 @@ const UserActivityTable = ({ userType }) => {
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sr. No.</th>
                                     {userType === 'Students' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No.</th>}
+                                    {userType === 'Teachers' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teacher ID</th>}
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
@@ -1529,6 +1567,11 @@ const UserActivityTable = ({ userType }) => {
                                         {userType === 'Students' && (
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono bg-blue-50">
                                                 {user.student_id || 'N/A'}
+                                            </td>
+                                        )}
+                                        {userType === 'Teachers' && (
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono bg-blue-50">
+                                                {getDisplayUserId(user)}
                                             </td>
                                         )}
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -1556,7 +1599,7 @@ const UserActivityTable = ({ userType }) => {
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={userType === 'Students' ? 8 : 7} className="px-6 py-12 text-center">
+                                        <td colSpan={userType === 'Students' ? 8 : 8} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3">
                                                 <UserCheck size={48} className="text-gray-300" />
                                                 <p className="text-gray-500 font-medium">
@@ -3197,13 +3240,36 @@ const StudentResultsView = () => {
         return true;
     });
 
-    const liveAttempts = filteredAttempts.filter(attempt => !attempt.is_completed);
+    const liveAttempts = filteredAttempts.filter(attempt => attempt.status === 'in_progress');
+    const expiredAttempts = filteredAttempts.filter(attempt => attempt.status === 'expired');
     const completedAttempts = filteredAttempts.filter(attempt => attempt.is_completed);
+    const latestCompletedAttempts = useMemo(() => {
+        const byStudentQuiz = new Map();
+        for (const attempt of completedAttempts) {
+            const key = `${attempt.student_id}-${attempt.quiz_id}`;
+            const existing = byStudentQuiz.get(key);
+
+            if (!existing) {
+                byStudentQuiz.set(key, attempt);
+                continue;
+            }
+
+            const existingSubmitted = existing.submitted_at ? new Date(existing.submitted_at).getTime() : 0;
+            const currentSubmitted = attempt.submitted_at ? new Date(attempt.submitted_at).getTime() : 0;
+            if (currentSubmitted >= existingSubmitted) {
+                byStudentQuiz.set(key, attempt);
+            }
+        }
+        return Array.from(byStudentQuiz.values());
+    }, [completedAttempts]);
     const activeLiveQuizzes = quizzes.filter((quiz) => quiz?.is_live_session && quiz?.is_active);
     const focusedLiveAttempts = liveAttempts.filter((attempt) => {
         if (liveQuizFocus === 'all') return true;
         return attempt.quiz_id === parseInt(liveQuizFocus);
     });
+    const reviewFlagCount = latestCompletedAttempts.filter(
+        (attempt) => attempt?.needs_review || (Array.isArray(attempt?.sanity_flags) && attempt.sanity_flags.length > 0)
+    ).length;
 
     const formatRemaining = (seconds) => {
         if (seconds === null || seconds === undefined) return '—';
@@ -3231,13 +3297,13 @@ const StudentResultsView = () => {
 
     // Export to CSV
     const exportToCSV = () => {
-        if (completedAttempts.length === 0) {
+        if (latestCompletedAttempts.length === 0) {
             error('No data to export');
             return;
         }
 
         const headers = ['Student Name', 'Email', 'Quiz', 'Score', 'Total Marks', 'Percentage', 'Grade', 'Correct Answers', 'Total Questions', 'Time Taken', 'Submitted At', 'Status'];
-        const csvData = completedAttempts.map((attempt) => {
+        const csvData = latestCompletedAttempts.map((attempt) => {
             const percentage = attempt.percentage || 0;
             const grade = getGradeFromPercentage(percentage);
             return [
@@ -3252,7 +3318,7 @@ const StudentResultsView = () => {
                 attempt.total_questions || 0,
                 attempt.time_taken || 'N/A',
                 attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'Not submitted',
-                grade === 'F' || grade === 'N/A' ? 'Failed' : 'Passed'
+                `${grade === 'F' || grade === 'N/A' ? 'Failed' : 'Passed'}${attempt?.needs_review ? ' (Review)' : ''}`
             ];
         });
 
@@ -3285,7 +3351,7 @@ const StudentResultsView = () => {
                     </button>
                     <button
                         onClick={exportToCSV}
-                        disabled={completedAttempts.length === 0}
+                        disabled={latestCompletedAttempts.length === 0}
                         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                         <Download size={20} />
@@ -3349,6 +3415,12 @@ const StudentResultsView = () => {
                     </div>
                 </div>
 
+                {expiredAttempts.length > 0 && (
+                    <p className="text-xs text-amber-800 mb-3 bg-amber-100 border border-amber-200 rounded px-2 py-1 inline-block">
+                        {expiredAttempts.length} attempt(s) are expired and awaiting submission finalization.
+                    </p>
+                )}
+
                 <p className="text-xs text-red-800 mb-3">
                     Live monitor tracks only students who are currently <strong>in progress</strong>; completed attempts are shown in the results table below.
                 </p>
@@ -3392,8 +3464,12 @@ const StudentResultsView = () => {
                                         <td className="px-3 py-2 text-gray-700">{formatElapsed(attempt.started_at)}</td>
                                         <td className="px-3 py-2 font-semibold text-red-700">{formatRemaining(attempt.remaining_seconds)}</td>
                                         <td className="px-3 py-2">
-                                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
-                                                In Progress
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                                attempt.status === 'expired'
+                                                    ? 'bg-amber-100 text-amber-800'
+                                                    : 'bg-yellow-100 text-yellow-800'
+                                            }`}>
+                                                {attempt.status === 'expired' ? 'Expired' : 'In Progress'}
                                             </span>
                                         </td>
                                     </tr>
@@ -3409,35 +3485,41 @@ const StudentResultsView = () => {
             {/* Summary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-600">Total Attempts</div>
-                    <div className="text-2xl font-bold text-blue-600">{completedAttempts.length}</div>
+                    <div className="text-sm text-gray-600">Completed Attempts (Latest)</div>
+                    <div className="text-2xl font-bold text-blue-600">{latestCompletedAttempts.length}</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Average Score</div>
                     <div className="text-2xl font-bold text-green-600">
-                        {completedAttempts.length > 0
-                            ? (completedAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / completedAttempts.length).toFixed(1)
+                        {latestCompletedAttempts.length > 0
+                            ? (latestCompletedAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / latestCompletedAttempts.length).toFixed(1)
                             : '0'}%
                     </div>
                 </div>
                 <div className="bg-yellow-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Pass Rate</div>
                     <div className="text-2xl font-bold text-yellow-600">
-                        {completedAttempts.length > 0
-                            ? ((completedAttempts.filter(a => {
+                        {latestCompletedAttempts.length > 0
+                            ? ((latestCompletedAttempts.filter(a => {
                                 const grade = getGradeFromPercentage(a.percentage || 0);
                                 return grade !== 'F' && grade !== 'N/A';
-                            }).length / completedAttempts.length) * 100).toFixed(1)
+                            }).length / latestCompletedAttempts.length) * 100).toFixed(1)
                             : '0'}%
                     </div>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-600">Students Participated</div>
+                    <div className="text-sm text-gray-600">Completed Unique Students</div>
                     <div className="text-2xl font-bold text-purple-600">
-                        {new Set(filteredAttempts.map(a => a.student_id)).size}
+                        {new Set(latestCompletedAttempts.map(a => a.student_id)).size}
                     </div>
                 </div>
             </div>
+
+            {reviewFlagCount > 0 && (
+                <div className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    {reviewFlagCount} completed attempt(s) flagged for review due to scoring/time sanity checks.
+                </div>
+            )}
 
             {/* Results Table */}
             {isLoading ? (
@@ -3462,7 +3544,7 @@ const StudentResultsView = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                                    {completedAttempts.map((attempt) => {
+                                    {latestCompletedAttempts.map((attempt) => {
                                 const percentage = attempt.percentage || 0;
                                 const grade = getGradeFromPercentage(percentage);
                                 const passed = grade !== 'F' && grade !== 'N/A';
@@ -3504,17 +3586,24 @@ const StudentResultsView = () => {
                                                 : 'Not submitted'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            {passed ? (
-                                                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
-                                                    <CheckCircle size={14} />
-                                                    Passed
-                                                </span>
-                                            ) : (
-                                                <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
-                                                    <XCircle size={14} />
-                                                    Failed
-                                                </span>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {passed ? (
+                                                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
+                                                        <CheckCircle size={14} />
+                                                        Passed
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
+                                                        <XCircle size={14} />
+                                                        Failed
+                                                    </span>
+                                                )}
+                                                {(attempt?.needs_review || (Array.isArray(attempt?.sanity_flags) && attempt.sanity_flags.length > 0)) && (
+                                                    <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
+                                                        Review
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -3708,7 +3797,7 @@ export default function AdminDashboard() {
     const portalLabel = user?.role === 'teacher' ? 'Teacher Portal' : user?.role === 'student' ? 'Student Portal' : 'Admin';
     const userInitials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase() || 'U';
     const identityLabel = user?.role === 'student' ? 'Student ID' : user?.role === 'teacher' ? 'Teacher ID' : 'Admin ID';
-    const identityValue = user?.role === 'student' ? (user?.student_id || user?.id || 'N/A') : (user?.id || 'N/A');
+    const identityValue = user ? getDisplayUserId(user) : 'N/A';
     
     // userViewMode can be 'list' (show table) or 'add' (show form)
     const [activeTab, setActiveTab] = useState('Dashboard');

@@ -29,6 +29,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     department: Optional[str] = None
     class_year: Optional[str] = None
+    student_id: Optional[str] = None
     phone_number: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=8)  # Allow password reset

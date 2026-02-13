@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 import csv
 import io
 from app.db.database import get_db
-from app.models.models import User
+from app.models.models import User, QuizAttempt, Answer, QuizAssignment, Quiz, Subject, QuestionBank
 from app.schemas.schemas import UserCreate, UserResponse, UserUpdate, UserActivityResponse
 from app.core.security import get_password_hash
 from app.core.deps import get_current_active_user, require_role
@@ -32,13 +33,13 @@ async def create_user(
             detail="Email already registered"
         )
     
-    # Check if student_id already exists (for students)
-    if user_data.role == "student" and user_data.student_id:
-        existing_student = db.query(User).filter(User.student_id == user_data.student_id).first()
-        if existing_student:
+    # Check if provided user ID already exists (for students/teachers)
+    if user_data.role in {"student", "teacher"} and user_data.student_id:
+        existing_user_id = db.query(User).filter(User.student_id == user_data.student_id).first()
+        if existing_user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Student ID already registered"
+                detail="User ID already registered"
             )
     
     # Create new user
@@ -51,7 +52,7 @@ async def create_user(
         role=user_data.role.lower(),
         department=user_data.department,
         class_year=user_data.class_year,
-        student_id=user_data.student_id if user_data.role.lower() == "student" else None,
+        student_id=user_data.student_id if user_data.role.lower() in {"student", "teacher"} else None,
         phone_number=user_data.phone_number
     )
     
@@ -263,6 +264,25 @@ async def update_user(
     if new_password:
         user.hashed_password = get_password_hash(new_password)
 
+    # Handle user ID updates for students/teachers
+    new_user_id = update_data.pop("student_id", None)
+    if new_user_id is not None:
+        normalized_user_id = new_user_id.strip() if isinstance(new_user_id, str) else new_user_id
+        if user.role in {"student", "teacher"}:
+            if normalized_user_id:
+                duplicate_user_id = db.query(User).filter(
+                    User.student_id == normalized_user_id,
+                    User.id != user.id
+                ).first()
+                if duplicate_user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="User ID already registered"
+                    )
+                user.student_id = normalized_user_id
+            else:
+                user.student_id = None
+
     # Only allow a safe subset of fields to be updated
     allowed_fields = {
         "first_name",
@@ -293,9 +313,38 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+
+    # Prevent deleting privileged users that still own data
+    if user.role in {"admin", "teacher"}:
+        has_owned_quizzes = db.query(Quiz.id).filter(Quiz.creator_id == user.id).first() is not None
+        has_owned_subjects = db.query(Subject.id).filter(Subject.creator_id == user.id).first() is not None
+        has_owned_questions = db.query(QuestionBank.id).filter(QuestionBank.creator_id == user.id).first() is not None
+        if has_owned_quizzes or has_owned_subjects or has_owned_questions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete this user because they have related created records"
+            )
+
+    # Student cleanup: remove dependent records first to avoid FK failures.
+    if user.role == "student":
+        attempt_ids = [
+            attempt_id
+            for (attempt_id,) in db.query(QuizAttempt.id).filter(QuizAttempt.student_id == user.id).all()
+        ]
+        if attempt_ids:
+            db.query(Answer).filter(Answer.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
+            db.query(QuizAttempt).filter(QuizAttempt.student_id == user.id).delete(synchronize_session=False)
+        db.query(QuizAssignment).filter(QuizAssignment.student_id == user.id).delete(synchronize_session=False)
     
-    db.delete(user)
-    db.commit()
+    try:
+        db.delete(user)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete user due to related records"
+        )
     
     return {"message": "User deleted successfully"}
 

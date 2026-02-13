@@ -24,10 +24,17 @@ const QuizTaker = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+    const [isRedirecting, setIsRedirecting] = useState(false);
+    const initStartedRef = useRef(false);
 
     // Load quiz and start attempt
     useEffect(() => {
         const initQuiz = async () => {
+            if (initStartedRef.current) {
+                return;
+            }
+            initStartedRef.current = true;
+
             try {
                 // Get quiz details
                 const quizData = await quizAPI.getQuiz(quizId);
@@ -44,6 +51,7 @@ const QuizTaker = () => {
                         
                         if (!eligibilityData.eligible) {
                             error(eligibilityData.reason || 'You cannot take this quiz at this time.');
+                            setIsRedirecting(true);
                             setTimeout(() => navigate('/dashboard'), 2000);
                             return;
                         }
@@ -54,6 +62,7 @@ const QuizTaker = () => {
                     } catch (err) {
                         console.error('Eligibility check failed:', err);
                         error('Failed to verify quiz eligibility. Please try again.');
+                        setIsRedirecting(true);
                         setTimeout(() => navigate('/dashboard'), 2000);
                         return;
                     }
@@ -130,6 +139,7 @@ const QuizTaker = () => {
                 error(errorMessage);
                 console.error('Quiz start error:', err);
                 // Only navigate back for quiz-specific errors, not auth errors
+                setIsRedirecting(true);
                 setTimeout(() => navigate('/dashboard'), 2000);
             } finally {
                 setIsLoading(false);
@@ -302,6 +312,17 @@ const QuizTaker = () => {
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
                     <p className="mt-4 text-gray-600 text-lg">Loading quiz...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (isRedirecting) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 text-lg">Redirecting to dashboard...</p>
                 </div>
             </div>
         );

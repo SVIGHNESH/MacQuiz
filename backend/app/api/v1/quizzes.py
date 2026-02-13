@@ -184,20 +184,27 @@ async def get_all_quizzes(
         if current_user.role == "student" and quiz.is_live_session:
             now = datetime.now()
             if quiz.live_start_time and quiz.live_end_time:
+                active_attempt = db.query(QuizAttempt).filter(
+                    QuizAttempt.quiz_id == quiz.id,
+                    QuizAttempt.student_id == current_user.id,
+                    QuizAttempt.is_completed == False
+                ).first()
+
                 # Only show quiz during the session (from start time)
                 # Skip if current time is before start time
                 if now < quiz.live_start_time:
                     continue
-                
-                # Allow joining up to 5 minutes after start (grace period)
-                grace_end = quiz.live_start_time + timedelta(minutes=5)
-                
-                # Skip if grace period has expired
-                if now > grace_end:
-                    continue
-                
+
                 # Skip if session has ended
                 if now > quiz.live_end_time:
+                    continue
+
+                # Allow joining up to 5 minutes after start (grace period)
+                grace_end = quiz.live_start_time + timedelta(minutes=5)
+
+                # Skip if grace period has expired
+                # But allow reconnection anytime during active session if student already has an in-progress attempt
+                if now > grace_end and not active_attempt:
                     continue
         
         quiz_dict = {
@@ -275,6 +282,12 @@ async def get_quiz(
         # For live sessions, enforce strict timing
         if quiz.is_live_session and quiz.live_start_time:
             now = datetime.now()
+            from app.models.models import QuizAttempt
+            active_attempt = db.query(QuizAttempt).filter(
+                QuizAttempt.quiz_id == quiz.id,
+                QuizAttempt.student_id == current_user.id,
+                QuizAttempt.is_completed == False
+            ).first()
             
             # Cannot access before start time
             if now < quiz.live_start_time:
@@ -285,7 +298,7 @@ async def get_quiz(
             
             # 5-minute grace period after start
             grace_end = quiz.live_start_time + timedelta(minutes=5)
-            if now > grace_end:
+            if now > grace_end and not active_attempt:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Quiz grace period expired. Cannot join after 5 minutes of start time."
@@ -457,6 +470,13 @@ async def check_quiz_eligibility(
     
     # For live sessions, enforce strict timing and calculate remaining time (only for students)
     if quiz.is_live_session and quiz.live_start_time and not is_teacher_or_admin:
+        # Check if session has ended
+        if quiz.live_end_time and now > quiz.live_end_time:
+            return {
+                "eligible": False,
+                "reason": "Quiz session has ended"
+            }
+
         # Cannot join before start time
         if now < quiz.live_start_time:
             return {
@@ -467,17 +487,11 @@ async def check_quiz_eligibility(
         
         # 5-minute grace period after start
         grace_end = quiz.live_start_time + timedelta(minutes=5)
-        if now > grace_end:
+        # New joins are blocked after grace; reconnections with active_attempt are allowed
+        if now > grace_end and not active_attempt:
             return {
                 "eligible": False,
                 "reason": "Quiz grace period expired. Cannot join after 5 minutes of start time."
-            }
-        
-        # Check if session has ended
-        if quiz.live_end_time and now > quiz.live_end_time:
-            return {
-                "eligible": False,
-                "reason": "Quiz session has ended"
             }
         
         # Calculate remaining time based on active attempt OR when student would join

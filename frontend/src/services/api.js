@@ -1,5 +1,21 @@
-// Remove trailing slash from API_BASE_URL to avoid double-slash issues
-const rawApiUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : 'http://3.110.145.152:8000');
+// Normalize API base URL and tolerate accidental comma-separated values in env.
+function resolveApiBaseUrl() {
+    const envValue = import.meta.env.VITE_API_BASE_URL;
+    if (!envValue) {
+        return import.meta.env.DEV ? 'http://localhost:8000' : 'http://3.110.145.152:8000';
+    }
+
+    const candidates = envValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+    // Prefer explicit backend ports when multiple URLs are provided accidentally.
+    const preferred = candidates.find((value) => /:8000(?:\/|$)/.test(value)) || candidates[0];
+    return preferred;
+}
+
+const rawApiUrl = resolveApiBaseUrl();
 export const API_BASE_URL = rawApiUrl.replace(/\/+$/, '');
 if (import.meta.env.DEV) {
     console.log('🔧 API Configuration:', {

@@ -13,6 +13,137 @@ from app.core.deps import get_current_active_user, require_role
 
 router = APIRouter()
 
+
+def _finalize_expired_attempt(db: Session, attempt: QuizAttempt, quiz: Quiz, now: datetime) -> None:
+    """Finalize an expired, incomplete attempt using currently saved answers."""
+    existing_answers = db.query(Answer).filter(Answer.attempt_id == attempt.id).all()
+    answer_map = {ans.question_id: ans for ans in existing_answers}
+    questions = db.query(Question).filter(Question.quiz_id == attempt.quiz_id).all()
+
+    total_score = 0.0
+    for question in questions:
+        answer = answer_map.get(question.id)
+        if not answer:
+            continue
+
+        student_answer = (answer.answer_text or "").strip().lower()
+        correct_answer = (question.correct_answer or "").strip().lower()
+        is_correct = student_answer == correct_answer
+
+        if is_correct:
+            marks_awarded = float(question.marks or 0)
+        else:
+            marks_awarded = -float(quiz.negative_marking or 0) if float(quiz.negative_marking or 0) > 0 else 0.0
+
+        answer.is_correct = is_correct
+        answer.marks_awarded = marks_awarded
+        total_score += marks_awarded
+
+    time_taken = (now - attempt.started_at).total_seconds() / 60 if attempt.started_at else 0
+    if quiz.duration_minutes and time_taken > quiz.duration_minutes:
+        time_taken = quiz.duration_minutes
+
+    attempt.score = max(0.0, total_score)
+    attempt.percentage = (attempt.score / attempt.total_marks * 100) if attempt.total_marks > 0 else 0
+    attempt.submitted_at = now
+    attempt.time_taken_minutes = round(time_taken, 2)
+    attempt.is_completed = True
+    attempt.is_graded = True
+
+    db.commit()
+
+
+def _is_attempt_expired(attempt: QuizAttempt, quiz: Quiz, now: datetime) -> bool:
+    if quiz.is_live_session and quiz.live_end_time:
+        return now > quiz.live_end_time
+    if quiz.duration_minutes and attempt.started_at:
+        deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
+        return now > deadline
+    return False
+
+
+def _normalize_student_attempts_for_quiz(
+    db: Session,
+    quiz: Quiz,
+    student_id: int,
+    now: datetime,
+):
+    student_attempts = db.query(QuizAttempt).filter(
+        QuizAttempt.quiz_id == quiz.id,
+        QuizAttempt.student_id == student_id,
+    ).order_by(QuizAttempt.started_at.desc(), QuizAttempt.id.desc()).all()
+
+    active_incomplete_attempts = []
+    has_completed_attempt = False
+
+    for existing_attempt in student_attempts:
+        if existing_attempt.is_completed:
+            has_completed_attempt = True
+            continue
+
+        if _is_attempt_expired(existing_attempt, quiz, now):
+            _finalize_expired_attempt(db, existing_attempt, quiz, now)
+            has_completed_attempt = True
+            continue
+
+        active_incomplete_attempts.append(existing_attempt)
+
+    # Keep only the latest active attempt; remove stale duplicates.
+    if len(active_incomplete_attempts) > 1:
+        stale_attempt_ids = [attempt.id for attempt in active_incomplete_attempts[1:]]
+        db.query(Answer).filter(Answer.attempt_id.in_(stale_attempt_ids)).delete(synchronize_session=False)
+        db.query(QuizAttempt).filter(QuizAttempt.id.in_(stale_attempt_ids)).delete(synchronize_session=False)
+        db.commit()
+        active_incomplete_attempts = active_incomplete_attempts[:1]
+
+    active_attempt = active_incomplete_attempts[0] if active_incomplete_attempts else None
+    return active_attempt, has_completed_attempt
+
+
+def _build_attempt_sanity_flags(
+    quiz: Quiz,
+    attempt: QuizAttempt,
+    total_questions: int,
+    correct_answers: int,
+    answered_count: int,
+):
+    flags = []
+
+    score = float(attempt.score or 0)
+    total_marks = float(attempt.total_marks or 0)
+    percentage = float(attempt.percentage) if attempt.percentage is not None else None
+
+    if score < 0:
+        flags.append("negative_score")
+
+    if total_marks >= 0 and score > (total_marks + 1e-6):
+        flags.append("score_exceeds_total")
+
+    if percentage is not None and (percentage < -0.1 or percentage > 100.1):
+        flags.append("percentage_out_of_range")
+
+    if correct_answers > answered_count:
+        flags.append("correct_exceeds_answered")
+
+    if total_questions > 0 and answered_count > total_questions:
+        flags.append("answered_exceeds_total")
+
+    if attempt.is_completed and total_questions > 0:
+        correct_ratio = correct_answers / total_questions
+        marks_per_correct = float(quiz.marks_per_correct or 1) if quiz else 1.0
+        negative_marking = float(quiz.negative_marking or 0) if quiz else 0.0
+
+        # Suspicious: many correct answers but net score clamped to zero, even though
+        # negative marking isn't aggressive enough to typically offset that level of correctness.
+        if score <= 0 and correct_ratio >= 0.5 and negative_marking <= marks_per_correct:
+            flags.append("high_correct_zero_score")
+
+        # Suspiciously fast completion for larger quizzes.
+        if attempt.time_taken_minutes is not None and total_questions >= 20 and float(attempt.time_taken_minutes) < 0.5:
+            flags.append("very_fast_completion")
+
+    return flags
+
 @router.post("/start", response_model=QuizAttemptResponse)
 async def start_quiz_attempt(
     attempt_data: QuizAttemptStart,
@@ -55,44 +186,40 @@ async def start_quiz_attempt(
             detail="Quiz is not active"
         )
     
+    now = datetime.now()
+
     # For teachers/admins previewing: delete any existing incomplete attempts to start fresh
     if is_teacher_or_admin:
         existing_incomplete = db.query(QuizAttempt).filter(
             QuizAttempt.quiz_id == quiz.id,
             QuizAttempt.student_id == current_user.id,
             QuizAttempt.is_completed == False
-        ).first()
+        ).all()
         if existing_incomplete:
-            db.delete(existing_incomplete)
+            existing_ids = [attempt.id for attempt in existing_incomplete]
+            db.query(Answer).filter(Answer.attempt_id.in_(existing_ids)).delete(synchronize_session=False)
+            db.query(QuizAttempt).filter(QuizAttempt.id.in_(existing_ids)).delete(synchronize_session=False)
             db.commit()
     else:
-        # For students: check if already attempted - if incomplete, return existing attempt (for reconnection)
-        existing_attempt = db.query(QuizAttempt).filter(
-            QuizAttempt.quiz_id == quiz.id,
-            QuizAttempt.student_id == current_user.id,
-            QuizAttempt.is_completed == False
-        ).first()
-        
-        if existing_attempt:
-            # Return existing incomplete attempt to allow continuation after refresh
-            return existing_attempt
-    
-    # Check if already completed this quiz (only for students)
-    if not is_teacher_or_admin:
-        completed_attempt = db.query(QuizAttempt).filter(
-            QuizAttempt.quiz_id == quiz.id,
-            QuizAttempt.student_id == current_user.id,
-            QuizAttempt.is_completed == True
-        ).first()
-        
-        if completed_attempt:
+        # For students: normalize historical data and enforce a single active/completed attempt state.
+        active_attempt, has_completed_attempt = _normalize_student_attempts_for_quiz(
+            db=db,
+            quiz=quiz,
+            student_id=current_user.id,
+            now=now,
+        )
+
+        # Return existing active attempt to allow reconnection.
+        if active_attempt:
+            return active_attempt
+
+        if has_completed_attempt:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="You have already completed this quiz. Reattempt is not allowed."
             )
     
     # Check live session timing (only for students)
-    now = datetime.now()
     if quiz.is_live_session and not is_teacher_or_admin:
         if not quiz.live_start_time or not quiz.live_end_time:
             raise HTTPException(
@@ -526,6 +653,20 @@ async def get_all_attempts(
     result = []
     for attempt in attempts:
         quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
+
+        # Auto-finalize expired incomplete attempts so live monitor stays accurate
+        if quiz and not attempt.is_completed:
+            is_expired = False
+            if quiz.is_live_session and quiz.live_end_time and now > quiz.live_end_time:
+                is_expired = True
+            elif quiz.duration_minutes and attempt.started_at:
+                deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
+                if now > deadline:
+                    is_expired = True
+
+            if is_expired:
+                _finalize_expired_attempt(db, attempt, quiz, now)
+
         student = db.query(User).filter(User.id == attempt.student_id).first()
         total_questions = db.query(Question).filter(Question.quiz_id == attempt.quiz_id).count()
         correct_answers = db.query(Answer).filter(
@@ -542,6 +683,13 @@ async def get_all_attempts(
                 deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
                 remaining_seconds = max(0, int((deadline - now).total_seconds()))
 
+        if attempt.is_completed:
+            status_value = "completed"
+        elif remaining_seconds is not None and remaining_seconds <= 0:
+            status_value = "expired"
+        else:
+            status_value = "in_progress"
+
         progress_percentage = 0.0
         if total_questions > 0:
             progress_percentage = round((answered_count / total_questions) * 100, 2)
@@ -554,6 +702,14 @@ async def get_all_attempts(
             time_taken_str = f"{minutes}m {seconds}s"
         
         # Create response dict
+        sanity_flags = _build_attempt_sanity_flags(
+            quiz=quiz,
+            attempt=attempt,
+            total_questions=total_questions,
+            correct_answers=correct_answers,
+            answered_count=answered_count,
+        )
+
         attempt_dict = {
             "id": attempt.id,
             "quiz_id": attempt.quiz_id,
@@ -576,7 +732,9 @@ async def get_all_attempts(
             "quiz_total_marks": float(quiz.total_marks) if quiz else float(attempt.total_marks),
             "time_taken": time_taken_str,
             "remaining_seconds": remaining_seconds,
-            "status": "completed" if attempt.is_completed else "in_progress"
+            "status": status_value,
+            "needs_review": len(sanity_flags) > 0,
+            "sanity_flags": sanity_flags,
         }
         result.append(attempt_dict)
     
