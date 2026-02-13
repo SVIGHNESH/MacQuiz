@@ -159,8 +159,11 @@ export const authAPI = {
     },
     
     logout: () => {
-        // Best-effort server-side revoke; ignore failures
-        fetchAPI('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
+        // Best-effort server-side revoke; only call if a token exists
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            fetchAPI('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
+        }
         localStorage.removeItem('access_token');
     },
 
