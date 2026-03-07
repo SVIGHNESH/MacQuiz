@@ -28,6 +28,7 @@ const QuizTaker = () => {
     const [preStartMessage, setPreStartMessage] = useState('');
     const [preStartAt, setPreStartAt] = useState(null);
     const [preStartCountdown, setPreStartCountdown] = useState(null);
+    const [initSequence, setInitSequence] = useState(0);
     const initStartedRef = useRef(false);
 
     const parseStartDate = useCallback((value) => {
@@ -55,10 +56,25 @@ const QuizTaker = () => {
         setPreStartAt(parsedStart);
         if (typeof explicitSeconds === 'number' && Number.isFinite(explicitSeconds)) {
             setPreStartCountdown(Math.max(0, Math.floor(explicitSeconds)));
+        } else if (parsedStart) {
+            const remaining = Math.max(0, Math.floor((parsedStart.getTime() - Date.now()) / 1000));
+            setPreStartCountdown(remaining);
+        } else {
+            setPreStartCountdown(null);
         }
         setIsRedirecting(false);
         setIsLoading(false);
     }, [extractStartDateFromMessage, parseStartDate]);
+
+    const retryQuizStart = useCallback(() => {
+        setPreStartMessage('');
+        setPreStartAt(null);
+        setPreStartCountdown(null);
+        setIsLoading(true);
+        // Allow initialization flow to run again for this quiz.
+        initStartedRef.current = false;
+        setInitSequence((prev) => prev + 1);
+    }, []);
 
     // Load quiz and start attempt
     useEffect(() => {
@@ -196,36 +212,30 @@ const QuizTaker = () => {
         };
 
         initQuiz();
-    }, [quizId, user?.role, error, navigate, success]);
+    }, [quizId, user?.role, error, navigate, success, openPreStartView, initSequence]);
 
     useEffect(() => {
-        if (preStartCountdown !== null) {
-            if (preStartCountdown <= 0) {
-                return;
-            }
-            const interval = setInterval(() => {
-                setPreStartCountdown((prev) => {
-                    if (prev === null || prev <= 0) return 0;
-                    return prev - 1;
-                });
-            }, 1000);
-            return () => clearInterval(interval);
-        }
-
-        if (!preStartAt) {
-            setPreStartCountdown(null);
+        if (preStartCountdown === null || preStartCountdown <= 0) {
             return;
         }
 
-        const tick = () => {
-            const remaining = Math.max(0, Math.floor((preStartAt.getTime() - Date.now()) / 1000));
-            setPreStartCountdown(remaining);
-        };
+        const interval = setInterval(() => {
+            setPreStartCountdown((prev) => {
+                if (prev === null || prev <= 0) return 0;
+                return prev - 1;
+            });
+        }, 1000);
 
-        tick();
-        const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [preStartAt]);
+    }, [preStartCountdown]);
+
+    useEffect(() => {
+        if (!preStartMessage || preStartCountdown === null || preStartCountdown > 0 || isLoading) {
+            return;
+        }
+
+        retryQuizStart();
+    }, [preStartMessage, preStartCountdown, isLoading, retryQuizStart]);
 
     // Periodic server timer sync (authoritative for live and regular timed quizzes)
     useEffect(() => {
@@ -431,7 +441,7 @@ const QuizTaker = () => {
                     )}
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <button
-                            onClick={() => window.location.reload()}
+                            onClick={retryQuizStart}
                             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                         >
                             Retry
