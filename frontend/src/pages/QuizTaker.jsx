@@ -25,6 +25,8 @@ const QuizTaker = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
     const [isRedirecting, setIsRedirecting] = useState(false);
+    const [loadingStep, setLoadingStep] = useState('Loading quiz...');
+    const [isLoadStalled, setIsLoadStalled] = useState(false);
     const [preStartMessage, setPreStartMessage] = useState('');
     const [preStartAt, setPreStartAt] = useState(null);
     const [preStartCountdown, setPreStartCountdown] = useState(null);
@@ -67,12 +69,35 @@ const QuizTaker = () => {
     }, [extractStartDateFromMessage, parseStartDate]);
 
     const retryQuizStart = useCallback(() => {
+        setQuiz(null);
+        setAttempt(null);
+        setAnswers({});
+        setCurrentQuestionIndex(0);
+        setTimeRemaining(null);
+        setCalculatedDuration(null);
+        setInitialDurationSeconds(null);
         setPreStartMessage('');
         setPreStartAt(null);
         setPreStartCountdown(null);
+        setIsRedirecting(false);
+        setLoadingStep('Retrying quiz start...');
+        setIsLoadStalled(false);
         setIsLoading(true);
         setInitSequence((prev) => prev + 1);
     }, []);
+
+    useEffect(() => {
+        if (!isLoading) {
+            setIsLoadStalled(false);
+            return;
+        }
+
+        const stallTimer = setTimeout(() => {
+            setIsLoadStalled(true);
+        }, 15000);
+
+        return () => clearTimeout(stallTimer);
+    }, [isLoading, initSequence]);
 
     // Load quiz and start attempt
     useEffect(() => {
@@ -84,6 +109,7 @@ const QuizTaker = () => {
             initStartedRef.current = initKey;
 
             try {
+                setLoadingStep('Fetching quiz details...');
                 // Get quiz details
                 const quizData = await quizAPI.getQuiz(quizId);
                 setQuiz(quizData);
@@ -95,6 +121,7 @@ const QuizTaker = () => {
                 let duration = quizData.duration_minutes;
                 if (!isTeacherOrAdmin) {
                     try {
+                        setLoadingStep('Checking quiz eligibility...');
                         const eligibilityData = await quizAPI.checkEligibility(quizId);
                         
                         if (!eligibilityData.eligible) {
@@ -135,6 +162,7 @@ const QuizTaker = () => {
                 setInitialDurationSeconds(initialTimeSeconds);
                 
                 // Start attempt (will return existing if in progress)
+                setLoadingStep('Starting your quiz attempt...');
                 const attemptData = await attemptAPI.startAttempt(quizId);
                 
                 // If attempt is already completed, redirect to results
@@ -147,6 +175,7 @@ const QuizTaker = () => {
 
                 // Server-authoritative timer sync (source of truth)
                 try {
+                    setLoadingStep('Syncing timer...');
                     const remainingData = await attemptAPI.getRemainingTime(attemptData.id);
                     if (remainingData?.remaining_seconds !== null && remainingData?.remaining_seconds !== undefined) {
                         setTimeRemaining(remainingData.remaining_seconds);
@@ -164,6 +193,7 @@ const QuizTaker = () => {
                 // Restore saved answers if this is a reconnection
                 let savedAnswersData = null;
                 try {
+                    setLoadingStep('Restoring saved answers...');
                     savedAnswersData = await attemptAPI.getSavedAnswers(attemptData.id);
                     if (savedAnswersData.answers && savedAnswersData.answers.length > 0) {
                         const restoredAnswers = {};
@@ -207,6 +237,7 @@ const QuizTaker = () => {
                 setTimeout(() => navigate('/dashboard'), 2000);
             } finally {
                 setIsLoading(false);
+                setLoadingStep('Loading quiz...');
             }
         };
 
@@ -404,9 +435,30 @@ const QuizTaker = () => {
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
+                <div className="text-center max-w-md px-4">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600 text-lg">Loading quiz...</p>
+                    <p className="mt-4 text-gray-700 text-lg font-medium">{loadingStep}</p>
+                    {isLoadStalled && (
+                        <div className="mt-5 bg-white shadow-md rounded-xl p-4 border border-gray-200">
+                            <p className="text-sm text-gray-600 mb-3">
+                                This is taking longer than expected. You can retry quiz initialization.
+                            </p>
+                            <div className="flex items-center justify-center gap-3">
+                                <button
+                                    onClick={retryQuizStart}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                >
+                                    Retry
+                                </button>
+                                <button
+                                    onClick={() => navigate('/dashboard')}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                                >
+                                    Back
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
