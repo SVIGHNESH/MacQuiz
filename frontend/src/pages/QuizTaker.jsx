@@ -25,6 +25,7 @@ const QuizTaker = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
     const [isRedirecting, setIsRedirecting] = useState(false);
+    const [blockedReason, setBlockedReason] = useState('');
     const [loadingStep, setLoadingStep] = useState('Loading quiz...');
     const [isLoadStalled, setIsLoadStalled] = useState(false);
     const [preStartMessage, setPreStartMessage] = useState('');
@@ -77,6 +78,7 @@ const QuizTaker = () => {
         setCalculatedDuration(null);
         setInitialDurationSeconds(null);
         setPreStartMessage('');
+        setBlockedReason('');
         setPreStartAt(null);
         setPreStartCountdown(null);
         setIsRedirecting(false);
@@ -135,9 +137,8 @@ const QuizTaker = () => {
                                 );
                                 return;
                             }
-                            error(reason);
-                            setIsRedirecting(true);
-                            setTimeout(() => navigate('/dashboard'), 2000);
+                            setBlockedReason(reason);
+                            setIsLoading(false);
                             return;
                         }
                         
@@ -146,9 +147,8 @@ const QuizTaker = () => {
                         }
                     } catch (err) {
                         console.error('Eligibility check failed:', err);
-                        error('Failed to verify quiz eligibility. Please try again.');
-                        setIsRedirecting(true);
-                        setTimeout(() => navigate('/dashboard'), 2000);
+                        setBlockedReason('Failed to verify quiz eligibility. Please retry.');
+                        setIsLoading(false);
                         return;
                     }
                 }
@@ -227,6 +227,12 @@ const QuizTaker = () => {
                 const normalizedError = String(errorMessage).toLowerCase();
                 if (normalizedError.includes('starts at') || normalizedError.includes('not started yet')) {
                     openPreStartView(errorMessage);
+                    return;
+                }
+
+                if (err?.status === 400 || err?.status === 403) {
+                    setBlockedReason(errorMessage || 'You cannot take this quiz right now.');
+                    setIsLoading(false);
                     return;
                 }
 
@@ -470,6 +476,32 @@ const QuizTaker = () => {
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
                     <p className="mt-4 text-gray-600 text-lg">Redirecting to dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (blockedReason) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+                <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-xl w-full">
+                    <AlertCircle className="w-14 h-14 text-amber-600 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Quiz Not Available</h2>
+                    <p className="text-gray-600 mb-6">{blockedReason}</p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button
+                            onClick={retryQuizStart}
+                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                            Retry
+                        </button>
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                        >
+                            Back to Dashboard
+                        </button>
+                    </div>
                 </div>
             </div>
         );
