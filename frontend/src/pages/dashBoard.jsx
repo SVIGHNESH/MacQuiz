@@ -4367,9 +4367,6 @@ export default function AdminDashboard() {
                 <img
                     src={sdcLogo}
                     alt="SDC Logo"
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
                     className="w-[160px] sm:w-[180px] h-auto object-contain"
                 />
             </div>

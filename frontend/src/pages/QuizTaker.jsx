@@ -25,14 +25,11 @@ const QuizTaker = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
     const [isRedirecting, setIsRedirecting] = useState(false);
-    const [blockedReason, setBlockedReason] = useState('');
-    const [loadingStep, setLoadingStep] = useState('Loading quiz...');
-    const [isLoadStalled, setIsLoadStalled] = useState(false);
     const [preStartMessage, setPreStartMessage] = useState('');
     const [preStartAt, setPreStartAt] = useState(null);
     const [preStartCountdown, setPreStartCountdown] = useState(null);
     const [initSequence, setInitSequence] = useState(0);
-    const initStartedRef = useRef('');
+    const initStartedRef = useRef(false);
 
     const parseStartDate = useCallback((value) => {
         if (!value) return null;
@@ -70,50 +67,24 @@ const QuizTaker = () => {
     }, [extractStartDateFromMessage, parseStartDate]);
 
     const retryQuizStart = useCallback(() => {
-        setQuiz(null);
-        setAttempt(null);
-        setAnswers({});
-        setCurrentQuestionIndex(0);
-        setTimeRemaining(null);
-        setCalculatedDuration(null);
-        setInitialDurationSeconds(null);
         setPreStartMessage('');
-        setBlockedReason('');
         setPreStartAt(null);
         setPreStartCountdown(null);
-        setIsRedirecting(false);
-        setLoadingStep('Retrying quiz start...');
-        setIsLoadStalled(false);
         setIsLoading(true);
+        // Allow initialization flow to run again for this quiz.
+        initStartedRef.current = false;
         setInitSequence((prev) => prev + 1);
     }, []);
-
-    useEffect(() => {
-        if (!isLoading) {
-            setIsLoadStalled(false);
-            return;
-        }
-
-        const stallTimer = setTimeout(() => {
-            setIsLoadStalled(true);
-            setBlockedReason('Quiz is taking too long to open. Please retry.');
-            setIsLoading(false);
-        }, 6000);
-
-        return () => clearTimeout(stallTimer);
-    }, [isLoading, initSequence]);
 
     // Load quiz and start attempt
     useEffect(() => {
         const initQuiz = async () => {
-            const initKey = `${quizId}:${initSequence}`;
-            if (initStartedRef.current === initKey) {
+            if (initStartedRef.current) {
                 return;
             }
-            initStartedRef.current = initKey;
+            initStartedRef.current = true;
 
             try {
-                setLoadingStep('Fetching quiz details...');
                 // Get quiz details
                 const quizData = await quizAPI.getQuiz(quizId);
                 setQuiz(quizData);
@@ -125,7 +96,6 @@ const QuizTaker = () => {
                 let duration = quizData.duration_minutes;
                 if (!isTeacherOrAdmin) {
                     try {
-                        setLoadingStep('Checking quiz eligibility...');
                         const eligibilityData = await quizAPI.checkEligibility(quizId);
                         
                         if (!eligibilityData.eligible) {
@@ -139,8 +109,9 @@ const QuizTaker = () => {
                                 );
                                 return;
                             }
-                            setBlockedReason(reason);
-                            setIsLoading(false);
+                            error(reason);
+                            setIsRedirecting(true);
+                            setTimeout(() => navigate('/dashboard'), 2000);
                             return;
                         }
                         
@@ -149,8 +120,9 @@ const QuizTaker = () => {
                         }
                     } catch (err) {
                         console.error('Eligibility check failed:', err);
-                        setBlockedReason('Failed to verify quiz eligibility. Please retry.');
-                        setIsLoading(false);
+                        error('Failed to verify quiz eligibility. Please try again.');
+                        setIsRedirecting(true);
+                        setTimeout(() => navigate('/dashboard'), 2000);
                         return;
                     }
                 }
@@ -164,7 +136,6 @@ const QuizTaker = () => {
                 setInitialDurationSeconds(initialTimeSeconds);
                 
                 // Start attempt (will return existing if in progress)
-                setLoadingStep('Starting your quiz attempt...');
                 const attemptData = await attemptAPI.startAttempt(quizId);
                 
                 // If attempt is already completed, redirect to results
@@ -177,7 +148,6 @@ const QuizTaker = () => {
 
                 // Server-authoritative timer sync (source of truth)
                 try {
-                    setLoadingStep('Syncing timer...');
                     const remainingData = await attemptAPI.getRemainingTime(attemptData.id);
                     if (remainingData?.remaining_seconds !== null && remainingData?.remaining_seconds !== undefined) {
                         setTimeRemaining(remainingData.remaining_seconds);
@@ -195,7 +165,6 @@ const QuizTaker = () => {
                 // Restore saved answers if this is a reconnection
                 let savedAnswersData = null;
                 try {
-                    setLoadingStep('Restoring saved answers...');
                     savedAnswersData = await attemptAPI.getSavedAnswers(attemptData.id);
                     if (savedAnswersData.answers && savedAnswersData.answers.length > 0) {
                         const restoredAnswers = {};
@@ -232,12 +201,6 @@ const QuizTaker = () => {
                     return;
                 }
 
-                if (err?.status === 400 || err?.status === 403) {
-                    setBlockedReason(errorMessage || 'You cannot take this quiz right now.');
-                    setIsLoading(false);
-                    return;
-                }
-
                 error(errorMessage);
                 console.error('Quiz start error:', err);
                 // Only navigate back for quiz-specific errors, not auth errors
@@ -245,7 +208,6 @@ const QuizTaker = () => {
                 setTimeout(() => navigate('/dashboard'), 2000);
             } finally {
                 setIsLoading(false);
-                setLoadingStep('Loading quiz...');
             }
         };
 
@@ -253,7 +215,7 @@ const QuizTaker = () => {
     }, [quizId, user?.role, error, navigate, success, openPreStartView, initSequence]);
 
     useEffect(() => {
-        if (!preStartMessage || preStartCountdown === null || preStartCountdown <= 0) {
+        if (preStartCountdown === null || preStartCountdown <= 0) {
             return;
         }
 
@@ -265,7 +227,7 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [preStartMessage, preStartCountdown]);
+    }, [preStartCountdown]);
 
     useEffect(() => {
         if (!preStartMessage || preStartCountdown === null || preStartCountdown > 0 || isLoading) {
@@ -331,7 +293,7 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [quiz, attempt?.id, isLoading, timeRemaining]);
+    }, [quiz, attempt, isLoading, timeRemaining]);
 
     const handleSubmitQuiz = useCallback(async (autoSubmit = false) => {
         if (!autoSubmit && !showSubmitConfirm) {
@@ -380,15 +342,8 @@ const QuizTaker = () => {
 
     const formatTime = (seconds) => {
         if (seconds === null) return '--:--';
-        const safeSeconds = Math.max(0, Math.floor(seconds));
-        const hrs = Math.floor(safeSeconds / 3600);
-        const mins = Math.floor((safeSeconds % 3600) / 60);
-        const secs = safeSeconds % 60;
-
-        if (hrs > 0) {
-            return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
@@ -450,28 +405,9 @@ const QuizTaker = () => {
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center max-w-md px-4">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Opening Quiz</h2>
-                    <p className="text-gray-700 text-base">{loadingStep}</p>
-                    <div className="mt-5 bg-white shadow-md rounded-xl p-4 border border-gray-200">
-                        <p className="text-sm text-gray-600 mb-3">
-                            If this page does not open quickly, retry immediately.
-                        </p>
-                        <div className="flex items-center justify-center gap-3">
-                            <button
-                                onClick={retryQuizStart}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            >
-                                Retry
-                            </button>
-                            <button
-                                onClick={() => navigate('/dashboard')}
-                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
-                            >
-                                Back
-                            </button>
-                        </div>
-                    </div>
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 text-lg">Loading quiz...</p>
                 </div>
             </div>
         );
@@ -481,33 +417,8 @@ const QuizTaker = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center">
-                    <p className="text-gray-600 text-lg">Redirecting to dashboard...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (blockedReason) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-                <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-xl w-full">
-                    <AlertCircle className="w-14 h-14 text-amber-600 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Quiz Not Available</h2>
-                    <p className="text-gray-600 mb-6">{blockedReason}</p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <button
-                            onClick={retryQuizStart}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                            Retry
-                        </button>
-                        <button
-                            onClick={() => navigate('/dashboard')}
-                            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
-                        >
-                            Back to Dashboard
-                        </button>
-                    </div>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 text-lg">Redirecting to dashboard...</p>
                 </div>
             </div>
         );
