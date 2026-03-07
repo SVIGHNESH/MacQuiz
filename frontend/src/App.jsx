@@ -19,13 +19,50 @@ const PageLoader = () => (
   </div>
 );
 
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("App render error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+          <div className="bg-white shadow-xl rounded-xl p-8 max-w-md w-full text-center">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Something went wrong</h1>
+            <p className="text-gray-600 mb-6">The page failed to render. Please refresh and try again.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
+          <AppErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
               <Route path="/" element={
                 <PublicRoute>
                   <Login />
@@ -91,8 +128,9 @@ export default function App() {
                   </div>
                 </div>
               } />
-            </Routes>
-          </Suspense>
+              </Routes>
+            </Suspense>
+          </AppErrorBoundary>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

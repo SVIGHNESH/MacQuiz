@@ -226,7 +226,7 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [preStartMessage]);
+    }, [preStartMessage, preStartCountdown]);
 
     useEffect(() => {
         if (!preStartMessage || preStartCountdown === null || preStartCountdown > 0 || isLoading) {
@@ -292,7 +292,7 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [quiz, attempt?.id, isLoading]);
+    }, [quiz, attempt?.id, isLoading, timeRemaining]);
 
     const handleSubmitQuiz = useCallback(async (autoSubmit = false) => {
         if (!autoSubmit && !showSubmitConfirm) {
