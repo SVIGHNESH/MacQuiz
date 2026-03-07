@@ -96,7 +96,9 @@ const QuizTaker = () => {
 
         const stallTimer = setTimeout(() => {
             setIsLoadStalled(true);
-        }, 15000);
+            setBlockedReason('Quiz is taking too long to open. Please retry.');
+            setIsLoading(false);
+        }, 6000);
 
         return () => clearTimeout(stallTimer);
     }, [isLoading, initSequence]);
@@ -449,29 +451,27 @@ const QuizTaker = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center max-w-md px-4">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-700 text-lg font-medium">{loadingStep}</p>
-                    {isLoadStalled && (
-                        <div className="mt-5 bg-white shadow-md rounded-xl p-4 border border-gray-200">
-                            <p className="text-sm text-gray-600 mb-3">
-                                This is taking longer than expected. You can retry quiz initialization.
-                            </p>
-                            <div className="flex items-center justify-center gap-3">
-                                <button
-                                    onClick={retryQuizStart}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                >
-                                    Retry
-                                </button>
-                                <button
-                                    onClick={() => navigate('/dashboard')}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
-                                >
-                                    Back
-                                </button>
-                            </div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Opening Quiz</h2>
+                    <p className="text-gray-700 text-base">{loadingStep}</p>
+                    <div className="mt-5 bg-white shadow-md rounded-xl p-4 border border-gray-200">
+                        <p className="text-sm text-gray-600 mb-3">
+                            If this page does not open quickly, retry immediately.
+                        </p>
+                        <div className="flex items-center justify-center gap-3">
+                            <button
+                                onClick={retryQuizStart}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                                Retry
+                            </button>
+                            <button
+                                onClick={() => navigate('/dashboard')}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                            >
+                                Back
+                            </button>
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         );
@@ -481,8 +481,7 @@ const QuizTaker = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600 text-lg">Redirecting to dashboard...</p>
+                    <p className="text-gray-600 text-lg">Redirecting to dashboard...</p>
                 </div>
             </div>
         );
