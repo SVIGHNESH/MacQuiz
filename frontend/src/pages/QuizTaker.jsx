@@ -215,7 +215,7 @@ const QuizTaker = () => {
     }, [quizId, user?.role, error, navigate, success, openPreStartView, initSequence]);
 
     useEffect(() => {
-        if (preStartCountdown === null || preStartCountdown <= 0) {
+        if (!preStartMessage || preStartCountdown === null || preStartCountdown <= 0) {
             return;
         }
 
@@ -227,7 +227,7 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [preStartCountdown]);
+    }, [preStartMessage]);
 
     useEffect(() => {
         if (!preStartMessage || preStartCountdown === null || preStartCountdown > 0 || isLoading) {
@@ -293,7 +293,7 @@ const QuizTaker = () => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [quiz, attempt, isLoading, timeRemaining]);
+    }, [quiz, attempt?.id, isLoading]);
 
     const handleSubmitQuiz = useCallback(async (autoSubmit = false) => {
         if (!autoSubmit && !showSubmitConfirm) {
