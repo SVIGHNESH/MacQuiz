@@ -29,7 +29,7 @@ const QuizTaker = () => {
     const [preStartAt, setPreStartAt] = useState(null);
     const [preStartCountdown, setPreStartCountdown] = useState(null);
     const [initSequence, setInitSequence] = useState(0);
-    const initStartedRef = useRef(false);
+    const initStartedRef = useRef('');
 
     const parseStartDate = useCallback((value) => {
         if (!value) return null;
@@ -71,18 +71,17 @@ const QuizTaker = () => {
         setPreStartAt(null);
         setPreStartCountdown(null);
         setIsLoading(true);
-        // Allow initialization flow to run again for this quiz.
-        initStartedRef.current = false;
         setInitSequence((prev) => prev + 1);
     }, []);
 
     // Load quiz and start attempt
     useEffect(() => {
         const initQuiz = async () => {
-            if (initStartedRef.current) {
+            const initKey = `${quizId}:${initSequence}`;
+            if (initStartedRef.current === initKey) {
                 return;
             }
-            initStartedRef.current = true;
+            initStartedRef.current = initKey;
 
             try {
                 // Get quiz details
