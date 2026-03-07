@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     CORS_ORIGINS: str = "http://localhost:5173"
-    CORS_ORIGIN_REGEX: str = ""
+    CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app$"
     CORS_ALLOW_CREDENTIALS: bool = True
     ADMIN_EMAIL: str = "admin@macquiz.com"
     ADMIN_PASSWORD: str = "admin123"

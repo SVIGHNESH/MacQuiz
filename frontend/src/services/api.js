@@ -2,7 +2,14 @@
 function resolveApiBaseUrl() {
     const envValue = import.meta.env.VITE_API_BASE_URL;
     if (!envValue) {
-        return import.meta.env.DEV ? 'http://localhost:8000' : '';
+        if (import.meta.env.DEV) {
+            return 'http://localhost:8000';
+        }
+        // Vercel production fallback: use same-origin deployment if backend is served on this domain.
+        if (typeof window !== 'undefined' && window.location?.origin) {
+            return window.location.origin;
+        }
+        return '';
     }
 
     const candidates = envValue
@@ -67,7 +74,7 @@ function isJwtExpired(token) {
 async function fetchAPI(endpoint, options = {}) {
     if (!API_BASE_URL) {
         throw new APIError(
-            'VITE_API_BASE_URL is not configured for production. Set it in your Vercel project environment variables.',
+            'API base URL is not configured. Set VITE_API_BASE_URL in Vercel, or deploy frontend/backend under the same origin.',
             0,
             { detail: 'Missing VITE_API_BASE_URL' }
         );
