@@ -28,8 +28,10 @@ const QuizTaker = () => {
     const [preStartMessage, setPreStartMessage] = useState('');
     const [preStartAt, setPreStartAt] = useState(null);
     const [preStartCountdown, setPreStartCountdown] = useState(null);
+    const [hasLoadingStalled, setHasLoadingStalled] = useState(false);
     const [initSequence, setInitSequence] = useState(0);
     const initStartedRef = useRef(false);
+    const lastAutoRetryAtRef = useRef(0);
 
     const parseStartDate = useCallback((value) => {
         if (!value) return null;
@@ -55,9 +57,14 @@ const QuizTaker = () => {
         setPreStartMessage(message || 'Quiz has not started yet.');
         setPreStartAt(parsedStart);
         if (typeof explicitSeconds === 'number' && Number.isFinite(explicitSeconds)) {
-            setPreStartCountdown(Math.max(0, Math.floor(explicitSeconds)));
+            const normalizedSeconds = Math.max(0, Math.ceil(explicitSeconds));
+            if (parsedStart && normalizedSeconds === 0 && parsedStart.getTime() > Date.now()) {
+                setPreStartCountdown(1);
+            } else {
+                setPreStartCountdown(normalizedSeconds);
+            }
         } else if (parsedStart) {
-            const remaining = Math.max(0, Math.floor((parsedStart.getTime() - Date.now()) / 1000));
+            const remaining = Math.max(0, Math.ceil((parsedStart.getTime() - Date.now()) / 1000));
             setPreStartCountdown(remaining);
         } else {
             setPreStartCountdown(null);
@@ -70,6 +77,7 @@ const QuizTaker = () => {
         setPreStartMessage('');
         setPreStartAt(null);
         setPreStartCountdown(null);
+        setHasLoadingStalled(false);
         setIsLoading(true);
         // Allow initialization flow to run again for this quiz.
         initStartedRef.current = false;
@@ -234,8 +242,33 @@ const QuizTaker = () => {
             return;
         }
 
+        // Avoid retry storms near start-time boundaries.
+        const nowMs = Date.now();
+        if (preStartAt && preStartAt.getTime() > nowMs) {
+            return;
+        }
+        if (nowMs - lastAutoRetryAtRef.current < 3000) {
+            return;
+        }
+
+        lastAutoRetryAtRef.current = nowMs;
+
         retryQuizStart();
-    }, [preStartMessage, preStartCountdown, isLoading, retryQuizStart]);
+    }, [preStartMessage, preStartCountdown, isLoading, retryQuizStart, preStartAt]);
+
+    // Show a retry UI if init calls are unexpectedly slow.
+    useEffect(() => {
+        if (!isLoading) {
+            setHasLoadingStalled(false);
+            return;
+        }
+
+        const stallTimer = setTimeout(() => {
+            setHasLoadingStalled(true);
+        }, 12000);
+
+        return () => clearTimeout(stallTimer);
+    }, [isLoading, initSequence]);
 
     // Periodic server timer sync (authoritative for live and regular timed quizzes)
     useEffect(() => {
@@ -403,6 +436,32 @@ const QuizTaker = () => {
     }
 
     if (isLoading) {
+        if (hasLoadingStalled) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+                    <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-xl w-full">
+                        <AlertCircle className="w-14 h-14 text-amber-600 mx-auto mb-4" />
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">Still Loading Quiz</h2>
+                        <p className="text-gray-600 mb-6">This is taking longer than expected. You can retry safely.</p>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                            <button
+                                onClick={retryQuizStart}
+                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                                Retry
+                            </button>
+                            <button
+                                onClick={() => navigate('/dashboard')}
+                                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                            >
+                                Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center">
