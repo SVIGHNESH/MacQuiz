@@ -53,6 +53,33 @@ function cloneJsonData(data) {
     }
 }
 
+function normalizeServerDateStrings(value) {
+    if (value === null || value === undefined) return value;
+
+    if (Array.isArray(value)) {
+        return value.map(normalizeServerDateStrings);
+    }
+
+    if (typeof value === 'object') {
+        const normalized = {};
+        for (const [key, nestedValue] of Object.entries(value)) {
+            normalized[key] = normalizeServerDateStrings(nestedValue);
+        }
+        return normalized;
+    }
+
+    if (typeof value === 'string') {
+        // Backend may return UTC-naive datetime strings (no timezone suffix).
+        // Interpret them as UTC so browser local rendering is correct.
+        const isNaiveIsoDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value);
+        if (isNaiveIsoDateTime) {
+            return `${value}Z`;
+        }
+    }
+
+    return value;
+}
+
 export function clearApiCache() {
     getResponseCache.clear();
 }
@@ -156,7 +183,8 @@ async function fetchAPI(endpoint, options = {}) {
         
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
-            const jsonData = await response.json();
+            const rawJsonData = await response.json();
+            const jsonData = normalizeServerDateStrings(rawJsonData);
             if (shouldUseGetCache && cacheKey) {
                 getResponseCache.set(cacheKey, {
                     data: jsonData,
