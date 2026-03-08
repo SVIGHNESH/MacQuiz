@@ -40,7 +40,15 @@ const QuizTaker = () => {
         const raw = String(value).trim();
         if (!raw) return null;
 
-        const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+        let normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+
+        // Backend may return UTC-naive datetime strings (e.g. "2026-03-08T08:25:00").
+        // Interpret such strings as UTC to avoid timezone drift on student devices.
+        const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+        if (!hasExplicitTz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(?:\.\d+)?)?$/.test(normalized)) {
+            normalized = `${normalized}Z`;
+        }
+
         const parsed = new Date(normalized);
         return Number.isNaN(parsed.getTime()) ? null : parsed;
     }, []);
