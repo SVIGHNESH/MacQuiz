@@ -673,6 +673,11 @@ async def get_all_attempts(
     now = datetime.now()
     query = db.query(QuizAttempt)
 
+    # Student Results/Live Monitor should include only real student attempts.
+    # This excludes teacher/admin preview attempts from dashboard counts.
+    query = query.join(User, User.id == QuizAttempt.student_id)
+    query = query.filter(User.role == "student")
+
     # Teachers can only see attempts for their own quizzes
     if current_user.role == "teacher":
         query = query.join(Quiz, Quiz.id == QuizAttempt.quiz_id)
