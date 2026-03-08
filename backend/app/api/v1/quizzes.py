@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import datetime, timedelta
+import math
 from app.db.database import get_db
 from app.models.models import User, Quiz, Question, QuestionBank, Subject
 from app.schemas.schemas import (
@@ -465,7 +466,7 @@ async def check_quiz_eligibility(
 
         # Cannot join before start time
         if now < quiz.live_start_time:
-            seconds_until_start = max(0, int((quiz.live_start_time - now).total_seconds()))
+            seconds_until_start = max(0, math.ceil((quiz.live_start_time - now).total_seconds()))
             return {
                 "eligible": False,
                 "reason": f"Quiz starts at {quiz.live_start_time}",
@@ -510,7 +511,7 @@ async def check_quiz_eligibility(
         grace_end = quiz.scheduled_at + timedelta(minutes=quiz.grace_period_minutes)
         
         if now < quiz.scheduled_at:
-            seconds_until_start = max(0, int((quiz.scheduled_at - now).total_seconds()))
+            seconds_until_start = max(0, math.ceil((quiz.scheduled_at - now).total_seconds()))
             return {
                 "eligible": False,
                 "reason": f"Quiz starts at {quiz.scheduled_at}",

@@ -263,7 +263,7 @@ export const userAPI = {
 export const quizAPI = {
     getAllQuizzes: () => fetchAPI('/api/v1/quizzes/'),
     getQuiz: (id) => fetchAPI(`/api/v1/quizzes/${id}`),
-    checkEligibility: (id) => fetchAPI(`/api/v1/quizzes/${id}/eligibility`),
+    checkEligibility: (id) => fetchAPI(`/api/v1/quizzes/${id}/eligibility`, { skipCache: true }),
     createQuiz: (quizData) => fetchAPI('/api/v1/quizzes/', {
         method: 'POST',
         body: JSON.stringify(quizData),
