@@ -13,6 +13,9 @@ from app.core.deps import get_current_active_user, require_role
 
 router = APIRouter()
 
+# Allow a small clock-skew tolerance so students are not blocked at countdown zero.
+START_TIME_TOLERANCE_SECONDS = 90
+
 @router.post("/", response_model=QuizResponse, dependencies=[Depends(require_role(["admin", "teacher"]))])
 async def create_quiz(
     quiz_data: QuizCreate,
@@ -464,8 +467,9 @@ async def check_quiz_eligibility(
                 "reason": "Quiz session has ended"
             }
 
-        # Cannot join before start time
-        if now < quiz.live_start_time:
+        # Cannot join before start time (with tolerance for minor clock drift).
+        live_join_open_time = quiz.live_start_time - timedelta(seconds=START_TIME_TOLERANCE_SECONDS)
+        if now < live_join_open_time:
             seconds_until_start = max(0, math.ceil((quiz.live_start_time - now).total_seconds()))
             return {
                 "eligible": False,
@@ -510,7 +514,8 @@ async def check_quiz_eligibility(
     elif quiz.scheduled_at and not is_teacher_or_admin:
         grace_end = quiz.scheduled_at + timedelta(minutes=quiz.grace_period_minutes)
         
-        if now < quiz.scheduled_at:
+        scheduled_open_time = quiz.scheduled_at - timedelta(seconds=START_TIME_TOLERANCE_SECONDS)
+        if now < scheduled_open_time:
             seconds_until_start = max(0, math.ceil((quiz.scheduled_at - now).total_seconds()))
             return {
                 "eligible": False,

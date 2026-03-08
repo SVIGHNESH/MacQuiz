@@ -13,6 +13,9 @@ from app.core.deps import get_current_active_user, require_role
 
 router = APIRouter()
 
+# Allow a small clock-skew tolerance so students are not blocked at countdown zero.
+START_TIME_TOLERANCE_SECONDS = 90
+
 
 def _finalize_expired_attempt(db: Session, attempt: QuizAttempt, quiz: Quiz, now: datetime) -> None:
     """Finalize an expired, incomplete attempt using currently saved answers."""
@@ -227,8 +230,9 @@ async def start_quiz_attempt(
                 detail="Live session times not configured properly"
             )
         
-        # Check if session hasn't started yet (must wait until start time)
-        if now < quiz.live_start_time:
+        # Check if session hasn't started yet (with tolerance for minor clock drift)
+        live_join_open_time = quiz.live_start_time - timedelta(seconds=START_TIME_TOLERANCE_SECONDS)
+        if now < live_join_open_time:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Live session has not started yet. Starts at {quiz.live_start_time.strftime('%H:%M:%S')}"
@@ -255,7 +259,8 @@ async def start_quiz_attempt(
     elif quiz.scheduled_at and not is_teacher_or_admin:
         grace_end = quiz.scheduled_at + timedelta(minutes=quiz.grace_period_minutes)
         
-        if now < quiz.scheduled_at:
+        scheduled_open_time = quiz.scheduled_at - timedelta(seconds=START_TIME_TOLERANCE_SECONDS)
+        if now < scheduled_open_time:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Quiz has not started yet. Starts at {quiz.scheduled_at}"
