@@ -320,9 +320,12 @@ async def submit_quiz_attempt(
     # Get quiz
     quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
     
+    # Teachers/admins previewing should not be blocked by student live-session deadlines.
+    is_teacher_or_admin = current_user.role in ["teacher", "admin"]
+
     # Validate deadline
     now = datetime.now()
-    if quiz.is_live_session:
+    if quiz.is_live_session and not is_teacher_or_admin:
         # For live sessions, deadline is the live_end_time regardless of when student started
         if now > quiz.live_end_time:
             raise HTTPException(
@@ -541,13 +544,15 @@ async def get_remaining_time(
     
     quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
     now = datetime.now()
+    is_teacher_or_admin = current_user.role in ["teacher", "admin"]
     
-    if quiz.is_live_session:
-        # For live sessions, remaining time is until live_end_time
+    if quiz.is_live_session and not is_teacher_or_admin:
+        # Student live sessions are bound to the session end-time.
         remaining = (quiz.live_end_time - now).total_seconds()
         is_expired = now > quiz.live_end_time
     else:
-        # For regular quizzes, remaining time is based on individual start time
+        # Teacher/admin previews use per-attempt duration even for live quizzes.
+        # Regular quizzes also use per-attempt duration.
         if quiz.duration_minutes:
             deadline = attempt.started_at + timedelta(minutes=quiz.duration_minutes)
             remaining = (deadline - now).total_seconds()
