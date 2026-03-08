@@ -13,6 +13,18 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
     const [isLiveSession, setIsLiveSession] = useState(false);
     const [liveStartTime, setLiveStartTime] = useState('');
 
+    const toLocalDateTimeInput = (value) => {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    };
+
+    const getLocalNowForDateTimeInput = () => {
+        const now = new Date();
+        return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    };
+
     const fetchStudents = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -60,12 +72,8 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
             // Check if quiz already has live session data from backend
             if (quiz.is_live_session && quiz.live_start_time) {
                 setIsLiveSession(true);
-                // Convert backend datetime to local datetime-local format
-                const date = new Date(quiz.live_start_time);
-                const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-                    .toISOString()
-                    .slice(0, 16);
-                setLiveStartTime(localDateTime);
+                // Convert backend datetime to local datetime-local input format.
+                setLiveStartTime(toLocalDateTimeInput(quiz.live_start_time));
             } else {
                 // No live session in backend, start fresh
                 setIsLiveSession(false);
@@ -166,17 +174,10 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
             };
 
             if (isLiveSession && liveStartTime) {
-                // Send datetime in local timezone format (YYYY-MM-DDTHH:MM:SS)
-                // Don't use toISOString() as it converts to UTC
-                const date = new Date(liveStartTime);
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                const seconds = String(date.getSeconds()).padStart(2, '0');
-                updatePayload.live_start_time = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-                console.log('🕐 Sending local time:', updatePayload.live_start_time);
+                // Send explicit UTC time to avoid server/browser timezone drift.
+                const selectedLocalDate = new Date(liveStartTime);
+                updatePayload.live_start_time = selectedLocalDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
+                console.log('🕐 Sending UTC time:', updatePayload.live_start_time);
             }
 
             console.log('Saving assignment with payload:', updatePayload);
@@ -265,7 +266,7 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
                                         type="datetime-local"
                                         value={liveStartTime}
                                         onChange={(e) => setLiveStartTime(e.target.value)}
-                                        min={new Date().toISOString().slice(0, 16)}
+                                        min={getLocalNowForDateTimeInput()}
                                         className="w-full px-4 py-2.5 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none font-medium"
                                         placeholder="Select date and time"
                                     />

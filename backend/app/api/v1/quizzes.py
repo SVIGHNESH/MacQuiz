@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import math
 from app.db.database import get_db
 from app.models.models import User, Quiz, Question, QuestionBank, Subject
@@ -557,6 +557,12 @@ async def update_quiz(
         )
     
     update_data = quiz_data.dict(exclude_unset=True)
+
+    # Store schedule datetimes in UTC-naive form for consistent comparisons on serverless.
+    for dt_field in ["scheduled_at", "live_start_time", "live_end_time"]:
+        dt_value = update_data.get(dt_field)
+        if isinstance(dt_value, datetime) and dt_value.tzinfo is not None:
+            update_data[dt_field] = dt_value.astimezone(timezone.utc).replace(tzinfo=None)
     
     # Handle student assignments if provided
     assigned_student_ids = update_data.pop('assigned_student_ids', None)
