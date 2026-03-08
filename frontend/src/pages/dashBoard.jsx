@@ -262,7 +262,7 @@ const SdcTeamSection = () => {
                     </div>
                     <div className="p-4 rounded-xl bg-green-50 border border-green-100">
                         <p className="text-sm text-gray-600 mb-1">Database</p>
-                        <p className="text-lg font-semibold text-gray-900">MySQL</p>
+                        <p className="text-lg font-semibold text-gray-900">MySQL/Postgres</p>
                     </div>
                 </div>
             </div>

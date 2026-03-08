@@ -62,7 +62,12 @@ const QuizTaker = () => {
 
     const openPreStartView = useCallback((message, explicitStart = null, explicitSeconds = null) => {
         const parsedStart = parseStartDate(explicitStart) || extractStartDateFromMessage(message);
-        setPreStartMessage(message || 'Quiz has not started yet.');
+        const rawMessage = message || 'Quiz has not started yet.';
+        const normalizedMessage = (parsedStart && /starts?\s+at/i.test(String(rawMessage)))
+            ? `Quiz not started yet. Starts at ${parsedStart.toLocaleString()}`
+            : rawMessage;
+
+        setPreStartMessage(normalizedMessage);
         setPreStartAt(parsedStart);
         if (typeof explicitSeconds === 'number' && Number.isFinite(explicitSeconds)) {
             const normalizedSeconds = Math.max(0, Math.ceil(explicitSeconds));
