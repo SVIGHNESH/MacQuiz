@@ -600,6 +600,10 @@ export const questionBankAPI = {
     deleteQuestion: (id) => fetchAPI(`/api/v1/question-bank/${id}`, {
         method: 'DELETE',
     }),
+    // 120s gives Gemini generous headroom; the backend's own call times out at 25s with a
+    // rule-based fallback (see backend/app/api/v1/question_bank.py). Safe on Render (no cap).
+    // On the Vercel fallback path, verify the project's function max duration exceeds ~30s
+    // or Vercel can kill the request before that internal fallback fires - see FREE_HOSTING_GUIDE.md 2b.
     generateQuestions: (payload) => fetchAPI('/api/v1/question-bank/ai/generate', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -621,6 +625,7 @@ export const analyticsAPI = {
     },
     getSubjectPerformance: (subjectId) => fetchAPI(`/api/v1/analytics/performance/subject/${subjectId}`),
     getDepartmentPerformance: (department) => fetchAPI(`/api/v1/analytics/performance/department/${department}`),
+    // See the comment on questionBankAPI.generateQuestions - same 120s/25s-internal-timeout rationale.
     getAIInsights: (payload = {}) => fetchAPI('/api/v1/analytics/reports/ai-insights', {
         method: 'POST',
         body: JSON.stringify(payload),
