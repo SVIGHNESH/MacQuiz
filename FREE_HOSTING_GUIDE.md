@@ -17,7 +17,7 @@ This guide gives you a **fully free starter deployment** using:
 DATABASE_URL=postgresql+psycopg://USER:ENCODED_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
 ```
 
-Use the **Supabase Session Pooler** endpoint (IPv4). Do not use `db.<project-ref>.supabase.co` for Vercel.
+Use the **Supabase Transaction Pooler** endpoint (IPv4, port 6543). Do not use `db.<project-ref>.supabase.co` for Vercel.
 Also URL-encode password special characters like `? / + & @ :`.
 
 ## 2) Deploy backend to Vercel
