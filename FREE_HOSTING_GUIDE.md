@@ -42,7 +42,20 @@ ADMIN_PASSWORD=change-this-password
 ```
 
 5. Deploy.
-6. Open backend URL once and verify:
+6. Run the one-time database bootstrap (creates tables and seeds the admin user). The app does **not** do this automatically on boot - serverless cold starts must not pay for schema/admin DB round-trips on every request. Run it once, from your machine, pointed at the production `DATABASE_URL`:
+
+```bash
+cd backend
+DATABASE_URL="postgresql+psycopg://USER:ENCODED_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require" \
+ADMIN_EMAIL="admin@macquiz.com" \
+ADMIN_PASSWORD="change-this-password" \
+python -m app.bootstrap
+```
+
+Re-running it later is safe (it's idempotent) - use it again after adding new model columns.
+
+7. Open backend URL and verify:
+   - `/health` reports `"database": "connected"`
    - `/docs` loads
    - login endpoint works
 

@@ -65,4 +65,6 @@ htmlcov/
 
 # MyPy
 .mypy_cache/
-# .vercel
+
+# Vercel project linkage (machine/account-specific, never share)
+.vercel
