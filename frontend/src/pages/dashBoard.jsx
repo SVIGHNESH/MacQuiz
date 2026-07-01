@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -10,6 +10,10 @@ import QuizAssignmentModal from "../components/QuizAssignmentModal";
 import UserCreationForm from "../components/dashboard/UserCreationForm";
 import EditUserModal from "../components/dashboard/EditUserModal";
 import ViewProfileModal from "../components/dashboard/ViewProfileModal";
+import StatCard from "../components/dashboard/StatCard";
+import AddNewUserCard from "../components/dashboard/AddNewUserCard";
+import SdcTeamSection from "../components/dashboard/SdcTeamSection";
+import TabErrorBoundary from "../components/dashboard/TabErrorBoundary";
 import QuizCreator from "./QuizCreator";
 import sdcLogo from "../assets/sdc-logo.png";
 import {
@@ -24,178 +28,6 @@ import { parseBackendUtcDate, getDisplayUserId } from "../utils/dashboardHelpers
 /**
  * --- UTILITY COMPONENTS ---
  */
-
-// Stat Card component for key metrics
-const StatCard = ({ title, value, icon: StatIcon, color, trend, subtitle }) => { // Icon renamed to StatIcon to fix ESLint error
-    // If trend is N/A, we prevent showing red/green colours
-    const trendColor = trend === 'N/A' ? 'text-gray-500' : (trend.includes('-') ? 'text-red-600' : 'text-green-600');
-    return (
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 transition duration-300 hover:shadow-xl">
-            <div className="flex items-center justify-between">
-                <div className={`p-3 rounded-full ${color}`}>
-                    <StatIcon size={24} />
-                </div>
-                <div className="text-sm font-medium text-gray-500">{title}</div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-                <div className="text-4xl font-bold text-gray-900">{value}</div>
-                <div className={`flex items-center text-sm font-semibold ${trendColor}`}>
-                    {trend}
-                </div>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">{subtitle}</p>
-        </div>
-    );
-};
-
-// Activity Feed Item
-const ActivityItem = ({ user, action, time, status }) => {
-    const statusColor = status === 'success' ? 'text-green-500' : status === 'error' ? 'text-red-500' : 'text-blue-500'; // Reverted to blue accent
-    const StatusIcon = status === 'success' ? CheckCircle : ClipboardList;
-
-    return (
-        <div className="flex items-center justify-between p-4 border-b last:border-b-0 hover:bg-gray-50 rounded-lg transition">
-            <div className="flex items-center space-x-3">
-                <StatusIcon size={20} className={statusColor} />
-                <div>
-                    <p className="font-semibold text-gray-800">{user}</p>
-                    <p className="text-sm text-gray-600">{action}</p>
-                </div>
-            </div>
-            <div className="text-xs text-gray-500 flex items-center">
-                <Clock size={14} className="mr-1" />
-                {time}
-            </div>
-        </div>
-    );
-};
-
-class TabErrorBoundary extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = { hasError: false, errorMessage: '' };
-    }
-
-    static getDerivedStateFromError(error) {
-        return {
-            hasError: true,
-            errorMessage: error?.message || 'Unexpected error'
-        };
-    }
-
-    componentDidCatch(error, errorInfo) {
-        console.error('Tab render error:', error, errorInfo);
-    }
-
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="bg-white rounded-2xl shadow-lg border border-red-100 p-6">
-                    <h3 className="text-lg font-bold text-red-700 mb-2">Unable to load this section</h3>
-                    <p className="text-sm text-red-600 mb-4">{this.state.errorMessage}</p>
-                    <button
-                        onClick={() => this.setState({ hasError: false, errorMessage: '' })}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition"
-                    >
-                        Retry
-                    </button>
-                </div>
-            );
-        }
-
-        return this.props.children;
-    }
-}
-
-// Card: Quick link for Admin to add new user (Teacher or Student)
-const AddNewUserCard = ({ onAddClick }) => (
-    // REMOVED: hover:shadow-2xl transition duration-300 transform hover:scale-[1.01]
-    <div className="bg-blue-600/90 text-white p-6 rounded-2xl shadow-xl border border-blue-700 cursor-pointer" onClick={onAddClick}>
-        <div className="flex items-center justify-between">
-            <div>
-                <h3 className="text-xl font-bold">New User Provisioning</h3>
-                <p className="text-blue-200 text-sm mt-1">Quickly onboard new teachers or students.</p>
-            </div>
-        </div>
-        {/* Reverted Button text color to blue */}
-        <div className="mt-5 w-full bg-white text-blue-800 py-3 rounded-xl text-center font-semibold transition shadow-lg text-lg">
-            Add Teacher / Student
-        </div>
-    </div>
-);
-
-const SdcTeamSection = () => {
-    const backendTeam = [
-        'Ritik Kumar',
-        'Devang Pathak',
-        'Vivek Sharma',
-        'Vighnesh Shukla'
-    ];
-
-    const frontendTeam = [
-        'Dakshita Tiwari',
-        'Anjali Tiwari',
-        'Rohit',
-        'Satyam Diwaker'
-    ];
-
-    return (
-        <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Software Development Cell (SDC)</h2>
-                <p className="text-gray-600">MacQuiz Development Team (Student Contributors)</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <Code2 size={20} className="mr-2 text-blue-600" />
-                        Backend Team
-                    </h3>
-                    <ul className="space-y-2">
-                        {backendTeam.map((name) => (
-                            <li key={name} className="px-3 py-2 rounded-lg bg-blue-50 text-gray-800 font-medium">
-                                {name}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <Code2 size={20} className="mr-2 text-indigo-600" />
-                        Frontend Team
-                    </h3>
-                    <ul className="space-y-2">
-                        {frontendTeam.map((name) => (
-                            <li key={name} className="px-3 py-2 rounded-lg bg-indigo-50 text-gray-800 font-medium">
-                                {name}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Tech Stack Used</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
-                        <p className="text-sm text-gray-600 mb-1">Backend</p>
-                        <p className="text-lg font-semibold text-gray-900">FastAPI</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
-                        <p className="text-sm text-gray-600 mb-1">Frontend</p>
-                        <p className="text-lg font-semibold text-gray-900">React</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-green-50 border border-green-100">
-                        <p className="text-sm text-gray-600 mb-1">Database</p>
-                        <p className="text-lg font-semibold text-gray-900">MySQL/Postgres</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // Component for listing existing users
 const UserList = ({ onAddClick, refreshTrigger }) => {
