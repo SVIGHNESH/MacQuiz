@@ -95,16 +95,16 @@ const DATA = {
     },
     {
       title: "Issue 2 - dashBoard.jsx is 5,214 lines in one file",
-      status: "bad",
+      status: "warn",
       quote: "This is the frontend's core quality problem. It is unmaintainable, and (see perf) it is eagerly imported so every user downloads all of it just to see the login page.",
-      resolution: "The eager-import half of this problem is fixed (see Lever 4 below — dashBoard.jsx is now React.lazy-loaded, so it no longer ships on the login page). The file itself has not been split. This is specifically blocked on browser verification, not merely deferred: splitting a 5,000+ line component with many interacting tabs/effects/state slices cannot be safely verified for behavioral regressions without running it in an actual browser and exercising each admin view, which this iteration format (no UI runtime) cannot do. Attempting it unverified would risk shipping a regression to the most-used admin surface in the app.",
-      commit: "not started — needs a session with browser access"
+      resolution: "The eager-import half of this problem is fixed (see Lever 4 below - dashBoard.jsx is now React.lazy-loaded, so it no longer ships on the login page). A first extraction pass is done: the 5 pure helper functions moved to src/utils/dashboardHelpers.js, and the 3 user-management modal/form components (UserCreationForm, EditUserModal, ViewProfileModal, ~1,000 lines) moved to src/components/dashboard/ as their own files - dashBoard.jsx is down from 5,230 to ~4,123 lines. Each move was verbatim (diffed against the original to confirm no logic changed) and verified with a clean production build, a clean lint pass, and a headless-browser load of the app with zero console errors. The remaining ~15 components in the file (UserList, TeacherStudentsView, AdminQuizMonitoring, StudentResultsView, SettingsComponent, the AdminDashboard shell, etc.) are still unsplit - those carry more shared state/tab-routing coupling and are safer to extract incrementally the same way, one cohesive cluster at a time, in future iterations rather than in one large unverified pass.",
+      commit: "iteration 13 (helpers + user-modal cluster extracted); remaining components not yet split"
     },
     {
       title: "Issue 3 - datetime.now() vs datetime.utcnow() mixed across models",
       status: "ok",
       quote: "created_at uses local, started_at/tokens use UTC ... this is a latent correctness bug for grace periods and \"remaining time,\" not just tidiness.",
-      resolution: "All model timestamp defaults standardized to datetime.utcnow() (User.created_at/last_active, Quiz.created_at/updated_at, Subject.created_at, QuestionBank.created_at/updated_at, QuizAssignment.assigned_at). Frontend's naive Date parsing of these UTC-naive strings fixed with a shared parseBackendUtcDate() helper in dashBoard.jsx, matching the Z-appending convention already used elsewhere. Functionally a no-op on a UTC-hosted deploy target, but removes the inconsistency and fixes real display bugs for any non-UTC host.",
+      resolution: "All model timestamp defaults standardized to datetime.utcnow() (User.created_at/last_active, Quiz.created_at/updated_at, Subject.created_at, QuestionBank.created_at/updated_at, QuizAssignment.assigned_at). Frontend's naive Date parsing of these UTC-naive strings fixed with a shared parseBackendUtcDate() helper (now in src/utils/dashboardHelpers.js, extracted from dashBoard.jsx in iteration 13), matching the Z-appending convention already used elsewhere. Functionally a no-op on a UTC-hosted deploy target, but removes the inconsistency and fixes real display bugs for any non-UTC host.",
       commit: "7b51b82 (iteration 5)"
     },
     {
@@ -171,8 +171,8 @@ const DATA = {
       title: "\"Total overhaul... do whatever you want\"",
       status: "warn",
       quote: "you can perform the total overhaul of this system do whatever you want but make sure that you have all the architecture details",
-      resolution: "Interpreted as license to fix the concrete, named problems thoroughly (all 4 issues + all 6 levers above) rather than a license for unscoped rewrites — each fix was scoped, verified, and recorded independently rather than bundled into one unreviewable overhaul. The one item this didn't reach is the dashBoard.jsx split (Issue 2), which is the largest remaining piece of unscoped work and needs browser verification to attempt safely.",
-      commit: "cumulative, iterations 2-11"
+      resolution: "Interpreted as license to fix the concrete, named problems thoroughly (all 4 issues + all 6 levers above) rather than a license for unscoped rewrites - each fix was scoped, verified, and recorded independently rather than bundled into one unreviewable overhaul. The dashBoard.jsx split (Issue 2) is the item that took longest to start, since a full rewrite couldn't be verified without a browser; it's now underway as a series of small, verbatim, diff-checked extractions instead.",
+      commit: "cumulative, iterations 2-13"
     },
     {
       title: "Architecture details in an interactive HTML doc folder",
