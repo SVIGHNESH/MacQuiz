@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 from typing import List
 import csv
 import io
@@ -238,17 +239,33 @@ async def get_all_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=300),
     role: str = None,
+    department: str = None,
+    search: str = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     query = db.query(User)
-    
+
     # Teachers can only see students
     if current_user.role == "teacher":
         query = query.filter(User.role == "student")
     elif role:
         query = query.filter(User.role == role.lower())
-    
+
+    if department:
+        query = query.filter(User.department == department)
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                User.first_name.ilike(like),
+                User.last_name.ilike(like),
+                User.email.ilike(like),
+                User.student_id.ilike(like),
+            )
+        )
+
     users = query.order_by(User.created_at.desc(), User.id.desc()).offset(skip).limit(limit).all()
     return users
 

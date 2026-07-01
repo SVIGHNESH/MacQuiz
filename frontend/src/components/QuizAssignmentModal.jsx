@@ -63,8 +63,7 @@ const QuizAssignmentModal = ({ isOpen, quiz, onClose, onSuccess }) => {
     const fetchStudents = useCallback(async () => {
         setIsLoading(true);
         try {
-            const allUsers = await userAPI.getAllUsers();
-            const studentsList = allUsers.filter(user => user.role === 'student');
+            const studentsList = await userAPI.getAllUsers({ role: 'student' });
             setStudents(studentsList);
         } catch (err) {
             console.error('Failed to load students:', err);

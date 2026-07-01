@@ -314,6 +314,28 @@ async function fetchAPI(endpoint, options = {}) {
     }
 }
 
+// Pages through a paginated list endpoint (skip/limit query params, bare-array response)
+// until a short page confirms there's nothing left, so callers keep getting the
+// full matching set even past the endpoint's single-request cap (currently 300).
+async function fetchAllPaginated(path, params = {}) {
+    const pageSize = params.limit ?? 300;
+    let skip = 0;
+    let all = [];
+
+    while (true) {
+        const query = new URLSearchParams(
+            Object.entries({ ...params, skip, limit: pageSize })
+                .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        ).toString();
+        const page = await fetchAPI(`${path}?${query}`);
+        all = all.concat(page);
+        if (page.length < pageSize) break;
+        skip += page.length;
+    }
+
+    return all;
+}
+
 export const authAPI = {
     login: async (email, password) => {
         const formData = new URLSearchParams();
@@ -361,7 +383,7 @@ export const userAPI = {
         method: 'PUT',
         body: JSON.stringify(userData),
     }),
-    getAllUsers: () => fetchAPI('/api/v1/users/'),
+    getAllUsers: (params = {}) => fetchAllPaginated('/api/v1/users/', params),
     getUser: (id) => fetchAPI(`/api/v1/users/${id}`),
     createUser: (userData) => fetchAPI('/api/v1/users/', {
         method: 'POST',
@@ -394,7 +416,7 @@ export const userAPI = {
 };
 
 export const quizAPI = {
-    getAllQuizzes: () => fetchAPI('/api/v1/quizzes/'),
+    getAllQuizzes: (params = {}) => fetchAllPaginated('/api/v1/quizzes/', params),
     getQuiz: (id) => fetchAPI(`/api/v1/quizzes/${id}`, { skipCache: true }),
     checkEligibility: (id) => fetchAPI(`/api/v1/quizzes/${id}/eligibility`, { skipCache: true }),
     createQuiz: (quizData) => fetchAPI('/api/v1/quizzes/', {

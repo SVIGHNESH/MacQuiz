@@ -1317,14 +1317,14 @@ const UserList = ({ onAddClick, refreshTrigger }) => {
     const fetchUsers = useCallback(async () => {
         setIsLoading(true);
         try {
-            const response = await userAPI.getAllUsers();
+            const response = await userAPI.getAllUsers(filter === 'all' ? {} : { role: filter });
             setUsers(response);
         } catch (_err) {
             error("Failed to load users");
         } finally {
             setIsLoading(false);
         }
-    }, [error]);
+    }, [error, filter]);
 
     useEffect(() => {
         fetchUsers();
@@ -1540,11 +1540,10 @@ const UserActivityTable = ({ userType }) => {
         const fetchUsers = async () => {
             setIsLoading(true);
             try {
-                const response = await userAPI.getAllUsers();
                 // Filter by role based on userType
                 const role = userType === 'Teachers' ? 'teacher' : 'student';
-                const filteredUsers = response.filter(user => user.role === role);
-                setUserData(filteredUsers);
+                const response = await userAPI.getAllUsers({ role });
+                setUserData(response);
             } catch (err) {
                 error(`Failed to load ${userType.toLowerCase()}`);
                 console.error(err);
@@ -2126,11 +2125,8 @@ const TeacherStudentsView = () => {
     const fetchTeacherStudents = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Get all users
-            const allUsers = await userAPI.getAllUsers();
-            
-            // Filter to show only students
-            const studentsList = allUsers.filter(u => u.role === 'student');
+            // Only fetch students - this view never needs teachers/admins
+            const studentsList = await userAPI.getAllUsers({ role: 'student' });
             setStudents(studentsList);
         } catch (err) {
             error('Failed to load students');
@@ -3505,7 +3501,7 @@ const StudentResultsView = ({ selfOnly = false }) => {
                 if (selfOnly) {
                     usersData = user ? [user] : [];
                 } else {
-                    usersData = await userAPI.getAllUsers();
+                    usersData = await userAPI.getAllUsers({ role: 'student' });
                 }
             } catch (err) {
                 throw new Error(`Users API failed: ${err.message}`);
@@ -3517,7 +3513,9 @@ const StudentResultsView = ({ selfOnly = false }) => {
                 throw new Error(`Quizzes API failed: ${err.message}`);
             }
 
-            const studentsList = usersData.filter(u => u.role === 'student');
+            const studentsList = selfOnly
+                ? usersData.filter(u => u.role === 'student')
+                : usersData;
             setStudents(studentsList);
             setQuizzes(quizzesData || []);
             await fetchAttemptsOnly({ silent: false });
