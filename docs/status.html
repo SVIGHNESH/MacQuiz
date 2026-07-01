@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacQuiz Docs - instruction.txt Fix Status</title>
+<style>
+  :root{
+    --sidebar:#111827; --text:#1e293b; --muted:#64748b;
+    --accent:#4f46e5; --accent-light:#eef2ff; --border:#e2e8f0;
+    --ok:#16a34a; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7; --bad:#b91c1c; --bad-bg:#fee2e2;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#f8fafc;display:flex;min-height:100vh;}
+  nav.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  nav.sidebar h1{font-size:16px;color:#fff;margin:0 0 4px;}
+  nav.sidebar .sub{font-size:12px;color:#94a3b8;margin-bottom:24px;}
+  nav.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  nav.sidebar a:hover{background:#1f2937;color:#fff;}
+  nav.sidebar a.active{background:var(--accent);color:#fff;font-weight:600;}
+  main{flex:1;padding:40px 56px;max-width:1000px;}
+  h2{font-size:28px;margin-top:0;}
+  h3{margin-top:40px;font-size:18px;color:#111827;}
+  p{line-height:1.65;color:#334155;}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:.87em;}
+  .summary-bar{display:flex;gap:14px;margin:20px 0 8px;flex-wrap:wrap;}
+  .stat{border:1px solid var(--border);background:#fff;border-radius:10px;padding:12px 18px;min-width:110px;text-align:center;}
+  .stat .n{font-size:24px;font-weight:800;}
+  .stat .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .stat.ok .n{color:var(--ok);}
+  .stat.warn .n{color:var(--warn);}
+  .stat.bad .n{color:var(--bad);}
+  .filters{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap;}
+  .filters button{border:1px solid var(--border);background:#fff;padding:8px 16px;border-radius:999px;font-size:13px;cursor:pointer;font-weight:600;color:var(--muted);}
+  .filters button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .item{border:1px solid var(--border);background:#fff;border-radius:12px;padding:18px 22px;margin:14px 0;}
+  .item .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+  .item h4{margin:0;font-size:15.5px;}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok);}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);}
+  .badge.bad{background:var(--bad-bg);color:var(--bad);}
+  .quote{font-style:italic;color:var(--muted);font-size:13px;margin:8px 0;padding-left:12px;border-left:3px solid var(--border);}
+  .resolution{font-size:14px;color:#334155;margin-top:6px;}
+  .meta{font-size:11.5px;color:#94a3b8;margin-top:10px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <h1>MacQuiz</h1>
+  <div class="sub">Architecture Docs</div>
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="database.html">Database Schema</a>
+  <a href="api.html">API Reference</a>
+  <a href="deployment.html">Deployment</a>
+  <a href="status.html" class="active">instruction.txt Fix Status</a>
+</nav>
+<main>
+  <h2>instruction.txt Fix Status</h2>
+  <p>The original review (<code>instruction.txt</code>, repo root) raised 4 numbered issues and 6 prioritized "levers," plus a closing ask to overhaul, ship real deployment files, and document the architecture. This page tracks every item honestly &mdash; including the ones still open &mdash; rather than only listing what's done.</p>
+
+  <div class="summary-bar" id="summaryBar"></div>
+
+  <div class="filters" id="filters">
+    <button data-f="all" class="active">All</button>
+    <button data-f="ok">Done</button>
+    <button data-f="warn">Partial / mitigated</button>
+    <button data-f="bad">Outstanding</button>
+  </div>
+
+  <h3>Numbered issues</h3>
+  <div id="issues"></div>
+
+  <h3>Levers (prioritized by impact)</h3>
+  <div id="levers"></div>
+
+  <h3>Closing paragraph's asks</h3>
+  <div id="closing"></div>
+
+  <h3>Hygiene findings not in the original review</h3>
+  <p style="font-size:13.5px;color:var(--muted);">Found while working the items above; listed for completeness, not because <code>instruction.txt</code> named them.</p>
+  <div id="bonus"></div>
+
+<script>
+const DATA = {
+  issues: [
+    {
+      title: "Issue 1 - Repo hygiene (venv312/, -Ritik forks, weak secret defaults)",
+      status: "ok",
+      quote: "backend/venv312/ ... Duplicate -Ritik forks are committed alongside the real files ... SECRET_KEY = \"change-this-secret-key\" and ADMIN_PASSWORD = \"admin123\" as defaults.",
+      resolution: "venv312/ and all -Ritik.* files removed from git tracking (confirmed byte-identical to their canonical counterparts before deletion, so no content was lost). Root, frontend, and backend .gitignore files rebuilt after finding they were corrupted by a bad merge that had silently neutered most ignore patterns. Weak SECRET_KEY/ADMIN_PASSWORD remain as documented fallback defaults only — render.yaml auto-generates SECRET_KEY and requires ADMIN_PASSWORD to be entered per deploy, so the weak defaults are never what actually ships.",
+      commit: "a6d66db (iteration 2), backend/.vercel/ hygiene miss fixed in 51867f0 (iteration 6)"
+    },
+    {
+      title: "Issue 2 - dashBoard.jsx is 5,214 lines in one file",
+      status: "bad",
+      quote: "This is the frontend's core quality problem. It is unmaintainable, and (see perf) it is eagerly imported so every user downloads all of it just to see the login page.",
+      resolution: "The eager-import half of this problem is fixed (see Lever 4 below — dashBoard.jsx is now React.lazy-loaded, so it no longer ships on the login page). The file itself has not been split. This is specifically blocked on browser verification, not merely deferred: splitting a 5,000+ line component with many interacting tabs/effects/state slices cannot be safely verified for behavioral regressions without running it in an actual browser and exercising each admin view, which this iteration format (no UI runtime) cannot do. Attempting it unverified would risk shipping a regression to the most-used admin surface in the app.",
+      commit: "not started — needs a session with browser access"
+    },
+    {
+      title: "Issue 3 - datetime.now() vs datetime.utcnow() mixed across models",
+      status: "ok",
+      quote: "created_at uses local, started_at/tokens use UTC ... this is a latent correctness bug for grace periods and \"remaining time,\" not just tidiness.",
+      resolution: "All model timestamp defaults standardized to datetime.utcnow() (User.created_at/last_active, Quiz.created_at/updated_at, Subject.created_at, QuestionBank.created_at/updated_at, QuizAssignment.assigned_at). Frontend's naive Date parsing of these UTC-naive strings fixed with a shared parseBackendUtcDate() helper in dashBoard.jsx, matching the Z-appending convention already used elsewhere. Functionally a no-op on a UTC-hosted deploy target, but removes the inconsistency and fixes real display bugs for any non-UTC host.",
+      commit: "7b51b82 (iteration 5)"
+    },
+    {
+      title: "Issue 4 - AI endpoints: 120s client timeout vs Vercel's function-duration cap",
+      status: "warn",
+      quote: "generateQuestions and getAIInsights set a 120s client timeout, but Vercel Hobby functions are capped at ~10-60s max duration. The function is killed server-side long before Gemini returns.",
+      resolution: "Investigated rather than blindly patched. The backend already self-bounds its Gemini calls at 25s/20s (question_bank.py, analytics.py) with a graceful rule-based fallback — this was true before this pass and wasn't previously documented. This issue is moot on the recommended Render path (no per-function duration cap). It only matters on the explicit Vercel-fallback path (2b), where Vercel's actual current default duration could not be confirmed for this repo's legacy builds/routes vercel.json format; documented as a 'verify your dashboard's Function Max Duration exceeds ~30s' instruction rather than asserting an unverified number.",
+      commit: "2b4291c (iteration 10) — FREE_HOSTING_GUIDE.md + api.js comments, no functional code change"
+    }
+  ],
+  levers: [
+    {
+      title: "Lever 1 - Move the backend to a warm-container host",
+      status: "ok",
+      quote: "the highest-leverage change is to move only the backend to a warm-container free tier (Render, Railway, or Fly.io). Keep the frontend on Vercel.",
+      resolution: "render.yaml added at repo root: a Render Blueprint free web service running uvicorn as a single always-warm process, verified to install this repo's exact pinned requirements.txt with wheels (no source compiles) on Python 3.12.7, and to boot + serve a 200 /health response.",
+      commit: "3518007 (iteration 7)"
+    },
+    {
+      title: "Lever 2 - Region-pin vercel.json + prepare_threshold=None",
+      status: "warn",
+      quote: "Add \"regions\": [...] to vercel.json ... Add prepare_threshold=None to connect_args.",
+      resolution: "prepare_threshold=None: done, applied to every Postgres connection regardless of host (not just Vercel), since the PgBouncer transaction-pooler collision it prevents isn't Vercel-specific. Region-pin: intentionally not done — no real Supabase region exists anywhere in this repo (only placeholder strings), so filling in a guessed region (e.g. bom1) would be fabricating infra config that could silently deploy to the wrong region or fail outright. It's also superseded by Lever 1: the recommended path no longer runs the backend on Vercel at all, so backend/vercel.json's region field is dead configuration on the primary path. Left as an explicit manual step in FREE_HOSTING_GUIDE.md's 2b (Vercel-fallback) section for whoever has a real region to enter.",
+      commit: "537f988 (iteration 3) for prepare_threshold; region-pin remains a documented manual step"
+    },
+    {
+      title: "Lever 3 - Stop re-running startup work on every cold boot",
+      status: "ok",
+      quote: "Move schema/admin bootstrap into a one-time deploy/migration step ... let the app boot without touching the DB.",
+      resolution: "Schema creation and admin seeding moved out of the FastAPI lifespan into backend/app/bootstrap.py, run once via python -m app.bootstrap (idempotent, verified by running twice against a fresh DB). lifespan is now a no-op. /health does a live per-request DB probe instead of relying on a boot-time flag.",
+      commit: "51867f0 (iteration 6)"
+    },
+    {
+      title: "Lever 4 - Frontend code-splitting",
+      status: "ok",
+      quote: "Switch the routes to React.lazy() + Suspense ... add build.rollupOptions.manualChunks in vite.config.js.",
+      resolution: "AdminDashboard, QuizCreator, QuizTaker, QuizResult converted to React.lazy() behind a <Suspense> boundary in App.jsx (Login stays static since every visitor needs it). vite.config.js splits vendor-react and vendor-icons into separate chunks. Verified with a production build that these routes emit as separate lazy-loaded chunks instead of folding into the main bundle.",
+      commit: "09fa7b5 (iteration 4)"
+    },
+    {
+      title: "Lever 5 - Consolidate the analytics queries",
+      status: "ok",
+      quote: "Collapse the dashboard counts into a few SELECT ... FILTER (WHERE ...) aggregate queries, and fix recent-activity with a single join + IN ... add a short server-side TTL cache (30-60s).",
+      resolution: "get_dashboard_stats now issues 5 FILTER-aggregate queries instead of 10 sequential .count() calls, wrapped in a 45s in-process TTL cache. get_recent_activity rewritten from an N+1 loop (up to 41 queries at limit=20) into one 3-table join. Verified byte-identical output against the old logic using hand-seeded edge-case data (active/inactive x student/teacher, in/out of the 'yesterday' window, in-progress vs completed attempts).",
+      commit: "33bc83c (iteration 8)"
+    },
+    {
+      title: "Lever 6 - Server-side pagination + filtering for list endpoints",
+      status: "warn",
+      quote: "getAllUsers() / getAllQuizzes() return entire tables and filter in the browser ... Add server-side pagination + filtering ... pass the dashboard's existing filters (role, department) down as query params.",
+      resolution: "Backend done: get_all_users gained department/search filters alongside the existing role filter; get_all_quizzes' skip/limit gained the same Query(ge=..., le=...) validation used elsewhere. Frontend partially done: the role filter is wired as a real query param at 5 call sites that only need one role (dashBoard.jsx's Teacher/Student list views, the student picker in QuizAssignmentModal). department/search filters exist server-side but no UI currently sends them — DetailedReportsTool mixes a department-filtered count with whole-org aggregate stats in one fetch, so wiring it in safely needs a small restructure, deliberately left for a future pass rather than risking a silent regression to the report totals.",
+      commit: "378451c (iteration 9)"
+    }
+  ],
+  closing: [
+    {
+      title: "Deployment files for Vercel (frontend) + Render or similar (backend)",
+      status: "ok",
+      quote: "create the files for the deployment for the vercel for the frontend, render for the backend or any similar service that will have the best free tier services",
+      resolution: "render.yaml (backend Blueprint) added at repo root. frontend/vercel.json and backend/vercel.json (Vercel-fallback path) already existed and remain valid. FREE_HOSTING_GUIDE.md rewritten to document the Render+Vercel path as the default, with the all-Vercel path kept as an explicit alternative.",
+      commit: "3518007 (iteration 7)"
+    },
+    {
+      title: "\"Total overhaul... do whatever you want\"",
+      status: "warn",
+      quote: "you can perform the total overhaul of this system do whatever you want but make sure that you have all the architecture details",
+      resolution: "Interpreted as license to fix the concrete, named problems thoroughly (all 4 issues + all 6 levers above) rather than a license for unscoped rewrites — each fix was scoped, verified, and recorded independently rather than bundled into one unreviewable overhaul. The one item this didn't reach is the dashBoard.jsx split (Issue 2), which is the largest remaining piece of unscoped work and needs browser verification to attempt safely.",
+      commit: "cumulative, iterations 2-11"
+    },
+    {
+      title: "Architecture details in an interactive HTML doc folder",
+      status: "ok",
+      quote: "make sure that you have all the architecture details mentioned in a doc folder neatly use the html files for the documentation to make the docs more interactive",
+      resolution: "This docs/ folder: index.html (overview), architecture.html (request flow, hosting model, DB pooling, bootstrap, code-splitting, analytics, pagination), database.html (all 10 tables with columns/FKs/constraints/indexes), api.html (all 68 route registrations, filterable by method/router/text), deployment.html (step-by-step Render+Vercel setup with env var tables), and this status page. Self-contained: inline CSS/JS, no build step, no CDN — open any file directly in a browser.",
+      commit: "this iteration"
+    }
+  ],
+  bonus: [
+    {
+      title: "Stale personal domain hardcoded in frontend/vercel.json + api.js",
+      status: "bad",
+      quote: "(not in instruction.txt — found while working Lever 1/deployment)",
+      resolution: "frontend/vercel.json's rewrites still point /api and /health at a specific personal Vercel domain (mac-quiz-2nj5.vercel.app), and api.js has a matching hardcoded host === 'mac-quiz.vercel.app' same-origin-proxy branch. Both are dead on the documented deploy path (which sets VITE_API_BASE_URL directly, bypassing the rewrite), but they're personal, stale config sitting in files a new deployer might copy verbatim. Not fixed yet — flagged repeatedly (iterations 7, 9) as a small, independent hygiene item for a future pass.",
+      commit: "not started"
+    }
+  ]
+};
+
+function badge(status){
+  const label = status === 'ok' ? 'Done' : status === 'warn' ? 'Partial / mitigated' : 'Outstanding';
+  return `<span class="badge ${status}">${label}</span>`;
+}
+
+function renderGroup(containerId, items){
+  const el = document.getElementById(containerId);
+  el.innerHTML = items.map(i => `
+    <div class="item" data-status="${i.status}">
+      <div class="top"><h4>${i.title}</h4>${badge(i.status)}</div>
+      <div class="quote">${i.quote}</div>
+      <div class="resolution">${i.resolution}</div>
+      <div class="meta">Ref: ${i.commit}</div>
+    </div>
+  `).join('');
+}
+
+renderGroup('issues', DATA.issues);
+renderGroup('levers', DATA.levers);
+renderGroup('closing', DATA.closing);
+renderGroup('bonus', DATA.bonus);
+
+const all = [...DATA.issues, ...DATA.levers, ...DATA.closing, ...DATA.bonus];
+const counts = { ok: 0, warn: 0, bad: 0 };
+all.forEach(i => counts[i.status]++);
+document.getElementById('summaryBar').innerHTML = `
+  <div class="stat ok"><div class="n">${counts.ok}</div><div class="l">Done</div></div>
+  <div class="stat warn"><div class="n">${counts.warn}</div><div class="l">Partial</div></div>
+  <div class="stat bad"><div class="n">${counts.bad}</div><div class="l">Outstanding</div></div>
+`;
+
+document.querySelectorAll('#filters button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const f = btn.dataset.f;
+    document.querySelectorAll('.item').forEach(item => {
+      item.classList.toggle('hidden', f !== 'all' && item.dataset.status !== f);
+    });
+  });
+});
+</script>
+</main>
+</body>
+</html>

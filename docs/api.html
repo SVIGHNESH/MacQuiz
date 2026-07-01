@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacQuiz Docs - API Reference</title>
+<style>
+  :root{
+    --sidebar:#111827; --text:#1e293b; --muted:#64748b;
+    --accent:#4f46e5; --accent-light:#eef2ff; --border:#e2e8f0;
+    --get:#0369a1; --get-bg:#e0f2fe; --post:#15803d; --post-bg:#dcfce7;
+    --put:#b45309; --put-bg:#fef3c7; --del:#b91c1c; --del-bg:#fee2e2;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#f8fafc;display:flex;min-height:100vh;}
+  nav.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  nav.sidebar h1{font-size:16px;color:#fff;margin:0 0 4px;}
+  nav.sidebar .sub{font-size:12px;color:#94a3b8;margin-bottom:24px;}
+  nav.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  nav.sidebar a:hover{background:#1f2937;color:#fff;}
+  nav.sidebar a.active{background:var(--accent);color:#fff;font-weight:600;}
+  main{flex:1;padding:40px 56px;max-width:1100px;}
+  h2{font-size:28px;margin-top:0;}
+  p{line-height:1.65;color:#334155;}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:.87em;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0;align-items:center;}
+  #search{flex:1;min-width:220px;padding:9px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;}
+  select{padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff;}
+  .count{font-size:12.5px;color:var(--muted);margin:0 0 10px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  thead th{text-align:left;padding:10px 12px;background:#f1f5f9;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);}
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#f8fafc;}
+  .m{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;letter-spacing:.02em;}
+  .m.get{background:var(--get-bg);color:var(--get);}
+  .m.post{background:var(--post-bg);color:var(--post);}
+  .m.put{background:var(--put-bg);color:var(--put);}
+  .m.delete{background:var(--del-bg);color:var(--del);}
+  .path{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;word-break:break-all;}
+  .auth{font-size:12px;color:var(--muted);max-width:150px;}
+  .tag{font-size:11.5px;color:#3730a3;background:var(--accent-light);padding:2px 8px;border-radius:999px;white-space:nowrap;}
+  .table-wrap{overflow-x:auto;border-radius:10px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <h1>MacQuiz</h1>
+  <div class="sub">Architecture Docs</div>
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="database.html">Database Schema</a>
+  <a href="api.html" class="active">API Reference</a>
+  <a href="deployment.html">Deployment</a>
+  <a href="status.html">instruction.txt Fix Status</a>
+</nav>
+<main>
+  <h2>API Reference</h2>
+  <p>All routes actually registered in <code>backend/app/main.py</code>, read directly from each router's <code>@router.*</code> decorators. Base path is <code>{BACKEND_URL}</code> &mdash; every path below already includes its router prefix. Filter by method, router, or search text; this is a static table, filtering happens client-side.</p>
+
+  <div class="controls">
+    <input id="search" type="text" placeholder="Search path or description...">
+    <select id="methodFilter">
+      <option value="">All methods</option>
+      <option value="GET">GET</option>
+      <option value="POST">POST</option>
+      <option value="PUT">PUT</option>
+      <option value="DELETE">DELETE</option>
+    </select>
+    <select id="tagFilter">
+      <option value="">All routers</option>
+      <option value="Authentication">Authentication</option>
+      <option value="Users">Users</option>
+      <option value="Subjects">Subjects</option>
+      <option value="Question Bank">Question Bank</option>
+      <option value="Quizzes">Quizzes</option>
+      <option value="Quiz Attempts">Quiz Attempts</option>
+      <option value="Analytics & Reports">Analytics &amp; Reports</option>
+    </select>
+  </div>
+  <p class="count"><span id="visibleCount"></span> endpoints shown</p>
+
+  <div class="table-wrap">
+  <table id="apiTable">
+    <thead><tr><th>Method</th><th>Path</th><th>Router</th><th>Auth</th><th>Description</th></tr></thead>
+    <tbody id="apiBody"></tbody>
+  </table>
+  </div>
+
+<script>
+const ROUTES = [
+  // Authentication - /api/v1/auth
+  ["POST","/api/v1/auth/login","Authentication","Public","OAuth2 form login, returns access + refresh JWT"],
+  ["POST","/api/v1/auth/login-json","Authentication","Public","JSON-body login (same as above, for non-form clients)"],
+  ["GET","/api/v1/auth/me","Authentication","Any authenticated user","Current user's profile"],
+  ["POST","/api/v1/auth/change-password","Authentication","Any authenticated user","Change own password"],
+  ["POST","/api/v1/auth/logout","Authentication","Any authenticated user","Revoke a single token (jti) via revoked_tokens"],
+  ["POST","/api/v1/auth/logout-all","Authentication","Any authenticated user","Revoke every token via user_token_blocks.revoked_before"],
+  ["POST","/api/v1/auth/refresh","Authentication","Valid refresh token","Exchange refresh token for a new access token"],
+
+  // Users - /api/v1/users
+  ["POST","/api/v1/users/","Users","Teacher/Admin","Create a user"],
+  ["POST","/api/v1/users/bulk-upload","Users","Teacher/Admin","CSV bulk-create users"],
+  ["GET","/api/v1/users/","Users","Teacher/Admin","List users - supports role/department/search filters + skip/limit"],
+  ["GET","/api/v1/users/me","Users","Any authenticated user","Own user record"],
+  ["PUT","/api/v1/users/me","Users","Any authenticated user","Update own profile"],
+  ["GET","/api/v1/users/{user_id}","Users","Teacher/Admin","Get one user by id"],
+  ["PUT","/api/v1/users/{user_id}","Users","Admin only","Update one user by id"],
+  ["DELETE","/api/v1/users/{user_id}","Users","Admin only","Delete one user by id"],
+  ["GET","/api/v1/users/activity/teachers","Users","Admin only","Teacher activity summary"],
+  ["GET","/api/v1/users/activity/students","Users","Admin only","Student activity summary"],
+
+  // Subjects - /api/v1/subjects
+  ["POST","/api/v1/subjects/","Subjects","Teacher/Admin","Create a subject"],
+  ["GET","/api/v1/subjects/","Subjects","Any authenticated user","List subjects"],
+  ["GET","/api/v1/subjects/{subject_id}","Subjects","Any authenticated user","Get one subject"],
+  ["PUT","/api/v1/subjects/{subject_id}","Subjects","Teacher/Admin (teacher: own only)","Update a subject"],
+  ["DELETE","/api/v1/subjects/{subject_id}","Subjects","Admin only","Delete (soft) a subject"],
+  ["GET","/api/v1/subjects/{subject_id}/statistics","Subjects","Any authenticated user","Per-subject stats"],
+
+  // Question Bank - /api/v1/question-bank
+  ["POST","/api/v1/question-bank/ai/generate","Question Bank","Teacher/Admin","Gemini-backed question generation (25s internal timeout, rule-based fallback)"],
+  ["POST","/api/v1/question-bank/","Question Bank","Teacher/Admin","Add a question to the bank"],
+  ["GET","/api/v1/question-bank/","Question Bank","Any authenticated user","List bank questions"],
+  ["GET","/api/v1/question-bank/{question_id}","Question Bank","Any authenticated user","Get one bank question"],
+  ["PUT","/api/v1/question-bank/{question_id}","Question Bank","Teacher/Admin (teacher: own only)","Update a bank question"],
+  ["DELETE","/api/v1/question-bank/{question_id}","Question Bank","Teacher/Admin (teacher: own only)","Delete a bank question"],
+  ["GET","/api/v1/question-bank/subjects/{subject_id}/topics","Question Bank","Any authenticated user","Distinct topics for a subject"],
+  ["GET","/api/v1/question-bank/subjects/{subject_id}/statistics","Question Bank","Any authenticated user","Bank stats for a subject"],
+
+  // Quizzes - /api/v1/quizzes
+  ["POST","/api/v1/quizzes/","Quizzes","Teacher/Admin","Create a quiz"],
+  ["GET","/api/v1/quizzes/","Quizzes","Any authenticated user","List quizzes visible to the caller"],
+  ["GET","/api/v1/quizzes/{quiz_id}","Quizzes","Any authenticated user","Get one quiz (with questions)"],
+  ["GET","/api/v1/quizzes/{quiz_id}/eligibility","Quizzes","Any authenticated user","Can the current student attempt this quiz right now"],
+  ["PUT","/api/v1/quizzes/{quiz_id}","Quizzes","Teacher/Admin (teacher: own only)","Update a quiz"],
+  ["DELETE","/api/v1/quizzes/{quiz_id}","Quizzes","Teacher/Admin (teacher: own only)","Delete a quiz"],
+  ["GET","/api/v1/quizzes/{quiz_id}/statistics","Quizzes","Teacher/Admin (teacher: own only)","Per-quiz aggregate stats"],
+  ["GET","/api/v1/quizzes/{quiz_id}/assignments","Quizzes","Teacher/Admin","Students assigned to this quiz"],
+  ["GET","/api/v1/quizzes/{quiz_id}/attempts","Quizzes","Teacher/Admin (teacher: own only)","All attempts for this quiz"],
+
+  // Quiz Attempts - /api/v1/attempts
+  ["POST","/api/v1/attempts/start","Quiz Attempts","Any authenticated user","Start (or resume) an attempt"],
+  ["POST","/api/v1/attempts/submit","Quiz Attempts","Any authenticated user","Submit an attempt for grading"],
+  ["POST","/api/v1/attempts/{attempt_id}/save-answer","Quiz Attempts","Any authenticated user","Autosave one answer mid-attempt"],
+  ["GET","/api/v1/attempts/{attempt_id}/answers","Quiz Attempts","Any authenticated user","Read back saved answers for an in-progress attempt"],
+  ["GET/POST","/api/v1/attempts/{attempt_id}/kick-out","Quiz Attempts","Teacher/Admin","Force-submit one live attempt"],
+  ["GET/POST","/api/v1/attempts/kick-out/{attempt_id}","Quiz Attempts","Teacher/Admin","Alias of the above"],
+  ["GET/POST","/api/v1/attempts/actions/{attempt_id}/kick-out","Quiz Attempts","Teacher/Admin","Alias of the above"],
+  ["GET/POST","/api/v1/attempts/kick-out","Quiz Attempts","Teacher/Admin","Force-submit via attempt_id query param"],
+  ["GET/POST","/api/v1/attempts/actions/kick-out","Quiz Attempts","Teacher/Admin","Alias of the above"],
+  ["GET","/api/v1/attempts/kick-out-status","Quiz Attempts","Teacher/Admin","Live-session forced-submit status"],
+  ["GET","/api/v1/attempts/actions/kick-out-status","Quiz Attempts","Teacher/Admin","Alias of the above"],
+  ["GET","/api/v1/attempts/{attempt_id}/remaining-time","Quiz Attempts","Any authenticated user","Server-computed time left, incl. grace period"],
+  ["GET","/api/v1/attempts/my-attempts","Quiz Attempts","Any authenticated user","Caller's own attempt history"],
+  ["GET","/api/v1/attempts/all-attempts","Quiz Attempts","Teacher/Admin","Every attempt, batched IN(...) lookups instead of N+1"],
+  ["GET","/api/v1/attempts/quiz/{quiz_id}/attempts","Quiz Attempts","Teacher/Admin","Attempts for one quiz"],
+  ["GET","/api/v1/attempts/stats/dashboard","Quiz Attempts","Admin only","Legacy dashboard stats path (see Analytics router too)"],
+  ["GET","/api/v1/attempts/stats/activity","Quiz Attempts","Admin only","Legacy recent-activity path"],
+  ["GET","/api/v1/attempts/{attempt_id}","Quiz Attempts","Any authenticated user","Get one attempt"],
+  ["GET","/api/v1/attempts/{attempt_id}/review","Quiz Attempts","Any authenticated user","Question-by-question review of an attempt"],
+  ["GET","/api/v1/attempts/review/{attempt_id}","Quiz Attempts","Any authenticated user","Alias of the above"],
+
+  // Analytics & Reports - /api/v1/analytics
+  ["GET","/api/v1/analytics/dashboard","Analytics & Reports","Admin only","FILTER-aggregate dashboard stats, 45s TTL cache"],
+  ["GET","/api/v1/analytics/teacher/{teacher_id}/stats","Analytics & Reports","Teacher/Admin (teacher: own only)","Per-teacher stats"],
+  ["GET","/api/v1/analytics/student/{student_id}/stats","Analytics & Reports","Any authenticated user (student: own only)","Per-student stats"],
+  ["GET","/api/v1/analytics/activity/recent","Analytics & Reports","Admin only","Recent activity, single join query (fixed N+1)"],
+  ["GET","/api/v1/analytics/activity/users","Analytics & Reports","Admin only","User activity list"],
+  ["GET","/api/v1/analytics/performance/subject/{subject_id}","Analytics & Reports","Any authenticated user","Performance breakdown by subject"],
+  ["GET","/api/v1/analytics/performance/department/{department}","Analytics & Reports","Teacher/Admin","Performance breakdown by department"],
+  ["POST","/api/v1/analytics/reports/ai-insights","Analytics & Reports","Teacher/Admin","Gemini-backed insights (20s internal timeout, rule-based fallback)"],
+];
+
+const tbody = document.getElementById('apiBody');
+const search = document.getElementById('search');
+const methodFilter = document.getElementById('methodFilter');
+const tagFilter = document.getElementById('tagFilter');
+const visibleCount = document.getElementById('visibleCount');
+
+function render(){
+  tbody.innerHTML = '';
+  const q = search.value.trim().toLowerCase();
+  const m = methodFilter.value;
+  const t = tagFilter.value;
+  let shown = 0;
+  ROUTES.forEach(([method, path, tag, auth, desc]) => {
+    const methodParts = method.split('/');
+    if (m && !methodParts.includes(m)) return;
+    if (t && tag !== t) return;
+    if (q && !(path.toLowerCase().includes(q) || desc.toLowerCase().includes(q))) return;
+    shown++;
+    const tr = document.createElement('tr');
+    const methodBadges = methodParts.map(p => `<span class="m ${p.toLowerCase()}">${p}</span>`).join(' ');
+    tr.innerHTML = `<td>${methodBadges}</td>
+      <td class="path">${path}</td>
+      <td><span class="tag">${tag}</span></td>
+      <td class="auth">${auth}</td>
+      <td>${desc}</td>`;
+    tbody.appendChild(tr);
+  });
+  visibleCount.textContent = shown + ' / ' + ROUTES.length;
+}
+search.addEventListener('input', render);
+methodFilter.addEventListener('change', render);
+tagFilter.addEventListener('change', render);
+render();
+</script>
+</main>
+</body>
+</html>
