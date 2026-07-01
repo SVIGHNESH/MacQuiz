@@ -21,6 +21,21 @@ import {
  * --- UTILITY FUNCTIONS ---
  */
 
+// Backend emits UTC-naive datetimes (no 'Z'/offset suffix); mark them as UTC
+// before parsing so they render in the viewer's local time, matching the
+// convention already used for scheduled_at/live_start_time elsewhere in the app.
+const parseBackendUtcDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+    const raw = String(value).trim().replace(' ', 'T');
+    if (!raw) return null;
+
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+    const parsed = new Date(hasTimezone ? raw : `${raw}Z`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 // Password strength validator
 const validatePasswordStrength = (password) => {
     const checks = {
@@ -1557,8 +1572,9 @@ const UserActivityTable = ({ userType }) => {
     const formatLastActive = (lastActive) => {
         if (!lastActive) return 'Never';
         try {
-            const date = new Date(lastActive);
-            return date.toLocaleDateString('en-US', { 
+            const date = parseBackendUtcDate(lastActive);
+            if (!date) return 'N/A';
+            return date.toLocaleDateString('en-US', {
                 month: 'short', 
                 day: 'numeric', 
                 year: 'numeric',
@@ -1579,8 +1595,9 @@ const UserActivityTable = ({ userType }) => {
 
         // Prepare CSV rows with complete information
         const rows = filteredData.map((user, index) => {
-            const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { 
-                month: 'short', day: 'numeric', year: 'numeric' 
+            const createdDateParsed = parseBackendUtcDate(user.created_at);
+            const createdDate = createdDateParsed ? createdDateParsed.toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric'
             }) : 'N/A';
 
             if (userType === 'Students') {
@@ -3714,7 +3731,8 @@ const StudentResultsView = ({ selfOnly = false }) => {
 
         const startedAt = attempt?.started_at;
         if (!startedAt) return '—';
-        const started = new Date(startedAt);
+        const started = parseBackendUtcDate(startedAt);
+        if (!started) return '—';
         const now = new Date();
         let seconds = Math.max(0, Math.floor((now - started) / 1000));
         if (seconds === 0 && attempt?.status === 'in_progress' && Number(attempt?.answered_count || 0) > 0) {
