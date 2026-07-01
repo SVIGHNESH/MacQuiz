@@ -4,6 +4,7 @@ from sqlalchemy import func, and_
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
+import time
 import urllib.request
 import urllib.error
 from app.core.deps import get_db, get_current_user, require_role
@@ -265,60 +266,63 @@ def _generate_with_gemini(metrics: dict, include_recommendations: bool) -> Optio
         "recommendations": recommendations,
     }
 
+_DASHBOARD_STATS_CACHE_TTL_SECONDS = 45
+_dashboard_stats_cache = {"data": None, "expires_at": 0.0}
+
+
 @router.get("/dashboard", response_model=DashboardStats)
 def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(["admin"]))
 ):
     """
-    Comprehensive dashboard statistics for admin
+    Comprehensive dashboard statistics for admin.
+
+    Dashboard stats change slowly, so results are cached in-process for a
+    short TTL to absorb a room full of admins/teachers refreshing at once.
     """
-    # Total quizzes
-    total_quizzes = db.query(Quiz).count()
-    active_quizzes = db.query(Quiz).filter(Quiz.is_active == True).count()
-    
-    # Students stats
-    total_students = db.query(User).filter(User.role == "student").count()
-    active_students = db.query(User).filter(
-        User.role == "student",
-        User.is_active == True
-    ).count()
-    
-    # Teachers stats
-    total_teachers = db.query(User).filter(User.role == "teacher").count()
-    active_teachers = db.query(User).filter(
-        User.role == "teacher",
-        User.is_active == True
-    ).count()
-    
-    # Subjects and questions
+    now = time.monotonic()
+    cached = _dashboard_stats_cache["data"]
+    if cached is not None and now < _dashboard_stats_cache["expires_at"]:
+        return cached
+
+    # Quizzes: total + active in one query via FILTER aggregates.
+    total_quizzes, active_quizzes = db.query(
+        func.count(Quiz.id),
+        func.count(Quiz.id).filter(Quiz.is_active == True),
+    ).one()
+
+    # Students + teachers: total/active for both roles in one query.
+    total_students, active_students, total_teachers, active_teachers = db.query(
+        func.count(User.id).filter(User.role == "student"),
+        func.count(User.id).filter(User.role == "student", User.is_active == True),
+        func.count(User.id).filter(User.role == "teacher"),
+        func.count(User.id).filter(User.role == "teacher", User.is_active == True),
+    ).one()
+
+    # Subjects and question bank.
     total_subjects = db.query(Subject).filter(Subject.is_active == True).count()
     total_questions_bank = db.query(QuestionBank).filter(
         QuestionBank.is_active == True
     ).count()
-    
-    # Yesterday's assessments
+
+    # Yesterday's assessments + total attempts (students only) in one query.
     yesterday_start = datetime.utcnow().replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(days=1)
     yesterday_end = yesterday_start + timedelta(days=1)
-    
-    yesterday_assessments = db.query(QuizAttempt).join(
-        User, User.id == QuizAttempt.student_id
-    ).filter(
-        User.role == "student",
-        QuizAttempt.started_at >= yesterday_start,
-        QuizAttempt.started_at < yesterday_end
-    ).count()
-    
-    # Total attempts
-    total_attempts = db.query(QuizAttempt).join(
-        User, User.id == QuizAttempt.student_id
-    ).filter(
+
+    yesterday_assessments, total_attempts = db.query(
+        func.count(QuizAttempt.id).filter(
+            QuizAttempt.started_at >= yesterday_start,
+            QuizAttempt.started_at < yesterday_end,
+        ),
+        func.count(QuizAttempt.id),
+    ).join(User, User.id == QuizAttempt.student_id).filter(
         User.role == "student"
-    ).count()
-    
-    return {
+    ).one()
+
+    result = {
         "total_quizzes": total_quizzes,
         "active_quizzes": active_quizzes,
         "total_students": total_students,
@@ -330,6 +334,11 @@ def get_dashboard_stats(
         "yesterday_assessments": yesterday_assessments,
         "total_attempts": total_attempts
     }
+
+    _dashboard_stats_cache["data"] = result
+    _dashboard_stats_cache["expires_at"] = now + _DASHBOARD_STATS_CACHE_TTL_SECONDS
+
+    return result
 
 
 @router.get("/teacher/{teacher_id}/stats", response_model=TeacherStats)
@@ -516,28 +525,35 @@ def get_recent_activity(
     """
     Get recent activity across the system
     """
-    activities = []
-    
-    # Recent quiz attempts
-    recent_attempts = db.query(QuizAttempt).order_by(
+    # Single joined query instead of two lookups per attempt (N+1).
+    rows = db.query(
+        QuizAttempt.id,
+        QuizAttempt.started_at,
+        QuizAttempt.is_completed,
+        QuizAttempt.score,
+        QuizAttempt.total_marks,
+        User.first_name,
+        User.last_name,
+        Quiz.title,
+    ).join(
+        User, User.id == QuizAttempt.student_id
+    ).join(
+        Quiz, Quiz.id == QuizAttempt.quiz_id
+    ).order_by(
         QuizAttempt.started_at.desc()
     ).limit(limit).all()
-    
-    for attempt in recent_attempts:
-        student = db.query(User).filter(User.id == attempt.student_id).first()
-        quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
-        
-        if student and quiz:
-            activities.append({
-                "id": attempt.id,
-                "user_name": f"{student.first_name} {student.last_name}",
-                "user_role": "student",
-                "action": f"Attempted quiz: {quiz.title}",
-                "timestamp": attempt.started_at,
-                "details": f"Score: {attempt.score}/{attempt.total_marks}" if attempt.is_completed else "In progress"
-            })
-    
-    return activities
+
+    return [
+        {
+            "id": row.id,
+            "user_name": f"{row.first_name} {row.last_name}",
+            "user_role": "student",
+            "action": f"Attempted quiz: {row.title}",
+            "timestamp": row.started_at,
+            "details": f"Score: {row.score}/{row.total_marks}" if row.is_completed else "In progress"
+        }
+        for row in rows
+    ]
 
 
 @router.get("/activity/users", response_model=List[UserActivityResponse])
