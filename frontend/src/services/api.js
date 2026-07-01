@@ -1,13 +1,5 @@
 // Normalize API base URL and tolerate accidental comma-separated values in env.
 function resolveApiBaseUrl() {
-    if (!import.meta.env.DEV && typeof window !== 'undefined') {
-        const host = (window.location?.hostname || '').toLowerCase();
-        // On custom production frontend domain, prefer same-origin + Vercel rewrite proxy.
-        if (host === 'mac-quiz.vercel.app') {
-            return window.location.origin;
-        }
-    }
-
     const envValue = import.meta.env.VITE_API_BASE_URL;
     if (!envValue) {
         if (import.meta.env.DEV) {

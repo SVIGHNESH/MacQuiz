@@ -185,10 +185,10 @@ const DATA = {
   bonus: [
     {
       title: "Stale personal domain hardcoded in frontend/vercel.json + api.js",
-      status: "bad",
+      status: "ok",
       quote: "(not in instruction.txt — found while working Lever 1/deployment)",
-      resolution: "frontend/vercel.json's rewrites still point /api and /health at a specific personal Vercel domain (mac-quiz-2nj5.vercel.app), and api.js has a matching hardcoded host === 'mac-quiz.vercel.app' same-origin-proxy branch. Both are dead on the documented deploy path (which sets VITE_API_BASE_URL directly, bypassing the rewrite), but they're personal, stale config sitting in files a new deployer might copy verbatim. Not fixed yet — flagged repeatedly (iterations 7, 9) as a small, independent hygiene item for a future pass.",
-      commit: "not started"
+      resolution: "Removed. frontend/vercel.json's /api and /health rewrites to the personal mac-quiz-2nj5.vercel.app domain are deleted, leaving only the required SPA catch-all rewrite (/(.*) → /index.html). api.js's matching host === 'mac-quiz.vercel.app' same-origin-proxy special case is removed too — it silently overrode VITE_API_BASE_URL for that one hostname, which was inconsistent with the documented deploy path. The generic same-origin fallback (used when VITE_API_BASE_URL is unset) already covers the same-origin case for any domain, so no behavior is lost for anyone following FREE_HOSTING_GUIDE.md.",
+      commit: "this iteration (12)"
     }
   ]
 };
