@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
@@ -160,8 +160,8 @@ async def create_quiz(
 
 @router.get("/", response_model=List[QuizResponse])
 async def get_all_quizzes(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=300),
     is_active: Optional[bool] = None,
     subject_id: Optional[int] = None,
     department: Optional[str] = None,

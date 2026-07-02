@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacQuiz Docs - Database Schema</title>
+<style>
+  :root{
+    --sidebar:#111827; --text:#1e293b; --muted:#64748b;
+    --accent:#4f46e5; --accent-light:#eef2ff; --border:#e2e8f0;
+    --ok:#16a34a; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7;
+    --code-bg:#0f172a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#f8fafc;display:flex;min-height:100vh;}
+  nav.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  nav.sidebar h1{font-size:16px;color:#fff;margin:0 0 4px;}
+  nav.sidebar .sub{font-size:12px;color:#94a3b8;margin-bottom:24px;}
+  nav.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  nav.sidebar a:hover{background:#1f2937;color:#fff;}
+  nav.sidebar a.active{background:var(--accent);color:#fff;font-weight:600;}
+  main{flex:1;padding:40px 56px;max-width:1040px;}
+  h2{font-size:28px;margin-top:0;}
+  h3{margin-top:38px;font-size:18px;color:#111827;}
+  p{line-height:1.65;color:#334155;}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:.87em;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:6px;}
+  .badge.pk{background:#fef3c7;color:#92400e;}
+  .badge.fk{background:#dbeafe;color:#1e40af;}
+  .badge.uq{background:#ede9fe;color:#5b21b6;}
+  .badge.ix{background:#dcfce7;color:#166534;}
+  table.tbl{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:13px;}
+  table.tbl th,table.tbl td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+  table.tbl th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+  table.tbl td code{white-space:nowrap;}
+  .tablecard{border:1px solid var(--border);border-radius:12px;background:#fff;margin:16px 0;overflow:hidden;}
+  .tablecard .head{background:var(--accent-light);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;}
+  .tablecard .head h4{margin:0;font-size:15px;color:#3730a3;}
+  .tablecard .head span{font-size:12px;color:#64748b;}
+  .tablecard .content{padding:6px 18px 16px;}
+  .constraints{font-size:12.5px;color:#475569;margin-top:8px;}
+  .constraints code{margin-right:6px;}
+  .diagram{border:1px solid var(--border);border-radius:14px;padding:24px;background:#fff;margin:20px 0;overflow-x:auto;font-size:13px;}
+  .diagram pre{margin:0;background:none;color:#334155;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.5;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <h1>MacQuiz</h1>
+  <div class="sub">Architecture Docs</div>
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="database.html" class="active">Database Schema</a>
+  <a href="api.html">API Reference</a>
+  <a href="deployment.html">Deployment</a>
+  <a href="status.html">instruction.txt Fix Status</a>
+</nav>
+<main>
+  <h2>Database Schema</h2>
+  <p>10 tables, defined in <code>backend/app/models/models.py</code> (SQLAlchemy ORM). Works against SQLite (local dev) or Postgres (Supabase, production) &mdash; column lengths are chosen for MySQL compatibility too, though MySQL isn't the primary target.</p>
+
+  <div class="diagram">
+    <pre>
+users ──┬── created quizzes (quizzes.creator_id)
+        ├── created subjects (subjects.creator_id)
+        ├── created question_bank rows (question_bank.creator_id)
+        ├── quiz_attempts (as student)
+        └── quiz_assignments (as assigned student)
+
+subjects ── quizzes (subject_id, nullable) ── questions (quiz_id)
+                                            └── question_bank (subject_id) ── questions (question_bank_id, optional link)
+
+quizzes ── quiz_attempts (quiz_id) ── answers (attempt_id, question_id)
+        └── quiz_assignments (quiz_id)
+
+revoked_tokens / user_token_blocks ── standalone session-management tables (no FK to a specific token, keyed by jti / user_id)
+    </pre>
+  </div>
+
+  <h3>Core tables</h3>
+
+  <div class="tablecard">
+    <div class="head"><h4>users</h4><span>identity + role for admin / teacher / student</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>email</code></td><td>String(255)</td><td><span class="badge uq">unique</span> <span class="badge ix">indexed</span></td></tr>
+        <tr><td><code>hashed_password</code></td><td>String(255)</td><td></td></tr>
+        <tr><td><code>first_name</code>, <code>last_name</code></td><td>String(100)</td><td></td></tr>
+        <tr><td><code>role</code></td><td>String(50)</td><td>'admin' | 'teacher' | 'student'</td></tr>
+        <tr><td><code>is_active</code></td><td>Boolean</td><td>default true</td></tr>
+        <tr><td><code>created_at</code>, <code>last_active</code></td><td>DateTime</td><td>default <code>datetime.utcnow</code></td></tr>
+        <tr><td><code>student_id</code></td><td>String(100)</td><td><span class="badge uq">unique</span> <span class="badge ix">indexed</span>, nullable (students only)</td></tr>
+        <tr><td><code>department</code>, <code>class_year</code>, <code>phone_number</code>, <code>profile_image</code></td><td>String / Text</td><td>nullable, student-facing fields</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>quizzes</h4><span>scheduling, live sessions, marking scheme</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>title</code>, <code>description</code></td><td>String(500) / Text</td><td></td></tr>
+        <tr><td><code>creator_id</code></td><td>Integer</td><td><span class="badge fk">FK → users.id</span></td></tr>
+        <tr><td><code>subject_id</code></td><td>Integer</td><td><span class="badge fk">FK → subjects.id</span> nullable</td></tr>
+        <tr><td><code>department</code>, <code>class_year</code></td><td>String</td><td>nullable, target audience filter</td></tr>
+        <tr><td><code>scheduled_at</code>, <code>duration_minutes</code>, <code>grace_period_minutes</code></td><td>DateTime / Integer</td><td>grace period defaults to 5 min</td></tr>
+        <tr><td><code>is_live_session</code>, <code>live_start_time</code>, <code>live_end_time</code></td><td>Boolean / DateTime</td><td>live proctored session fields</td></tr>
+        <tr><td><code>total_marks</code>, <code>marks_per_correct</code>, <code>negative_marking</code></td><td>Float</td><td>marking scheme</td></tr>
+        <tr><td><code>is_active</code></td><td>Boolean</td><td>default false</td></tr>
+        <tr><td><code>created_at</code>, <code>updated_at</code></td><td>DateTime</td><td><code>utcnow</code> default + onupdate</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>questions</h4><span>quiz-owned question instances</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>quiz_id</code></td><td>Integer</td><td><span class="badge fk">FK → quizzes.id</span></td></tr>
+        <tr><td><code>question_bank_id</code></td><td>Integer</td><td><span class="badge fk">FK → question_bank.id</span> nullable, set if pulled from bank</td></tr>
+        <tr><td><code>question_text</code>, <code>question_type</code></td><td>Text / String(50)</td><td>'mcq' | 'true_false' | 'short_answer'</td></tr>
+        <tr><td><code>option_a..d</code>, <code>correct_answer</code></td><td>String(500)</td><td></td></tr>
+        <tr><td><code>marks</code>, <code>order</code></td><td>Float / Integer</td><td>question order within the quiz</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>quiz_attempts</h4><span>one row per student attempt</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>quiz_id</code></td><td>Integer</td><td><span class="badge fk">FK → quizzes.id</span></td></tr>
+        <tr><td><code>student_id</code></td><td>Integer</td><td><span class="badge fk">FK → users.id</span></td></tr>
+        <tr><td><code>score</code>, <code>total_marks</code>, <code>percentage</code></td><td>Float</td><td></td></tr>
+        <tr><td><code>started_at</code></td><td>DateTime</td><td>default <code>utcnow</code> &mdash; timer/grace-period comparisons rely on this being UTC</td></tr>
+        <tr><td><code>submitted_at</code>, <code>time_taken_minutes</code></td><td>DateTime / Float</td><td>nullable until submitted</td></tr>
+        <tr><td><code>is_completed</code>, <code>is_graded</code></td><td>Boolean</td><td></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>answers</h4><span>per-question response within an attempt</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>attempt_id</code></td><td>Integer</td><td><span class="badge fk">FK → quiz_attempts.id</span></td></tr>
+        <tr><td><code>question_id</code></td><td>Integer</td><td><span class="badge fk">FK → questions.id</span></td></tr>
+        <tr><td><code>answer_text</code>, <code>is_correct</code>, <code>marks_awarded</code></td><td>Text / Boolean / Float</td><td></td></tr>
+      </table>
+      <div class="constraints">
+        <code>UNIQUE(attempt_id, question_id)</code> as <code>uq_answers_attempt_question</code> &mdash;
+        <code>INDEX(attempt_id, question_id)</code> as <code>ix_answers_attempt_question</code>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:6px;">This composite index is what lets the all-attempts/my-attempts endpoints batch-load answers via <code>IN (...)</code> instead of one query per attempt.</p>
+    </div>
+  </div>
+
+  <h3>Supporting tables</h3>
+
+  <div class="tablecard">
+    <div class="head"><h4>subjects</h4><span>top-level subject/course grouping</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>name</code></td><td>String(500)</td><td><span class="badge uq">unique</span></td></tr>
+        <tr><td><code>code</code></td><td>String(50)</td><td><span class="badge uq">unique</span></td></tr>
+        <tr><td><code>description</code>, <code>department</code></td><td>Text / String(100)</td><td>nullable</td></tr>
+        <tr><td><code>creator_id</code></td><td>Integer</td><td><span class="badge fk">FK → users.id</span></td></tr>
+        <tr><td><code>is_active</code>, <code>created_at</code></td><td>Boolean / DateTime</td><td></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>question_bank</h4><span>reusable questions, independent of any one quiz</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>subject_id</code></td><td>Integer</td><td><span class="badge fk">FK → subjects.id</span></td></tr>
+        <tr><td><code>creator_id</code></td><td>Integer</td><td><span class="badge fk">FK → users.id</span></td></tr>
+        <tr><td><code>question_text</code>, <code>question_type</code></td><td>Text / String(50)</td><td></td></tr>
+        <tr><td><code>option_a..d</code>, <code>correct_answer</code></td><td>String(500)</td><td></td></tr>
+        <tr><td><code>topic</code>, <code>difficulty</code></td><td>String(200) / String(20)</td><td>difficulty: 'easy' | 'medium' | 'hard'</td></tr>
+        <tr><td><code>marks</code>, <code>times_used</code>, <code>is_active</code></td><td>Float / Integer / Boolean</td><td></td></tr>
+        <tr><td><code>created_at</code>, <code>updated_at</code></td><td>DateTime</td><td><code>utcnow</code> default + onupdate</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>quiz_assignments</h4><span>which students are assigned to which quiz</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>quiz_id</code></td><td>Integer</td><td><span class="badge fk">FK → quizzes.id</span></td></tr>
+        <tr><td><code>student_id</code></td><td>Integer</td><td><span class="badge fk">FK → users.id</span></td></tr>
+        <tr><td><code>assigned_at</code></td><td>DateTime</td><td>default <code>utcnow</code></td></tr>
+      </table>
+      <div class="constraints">
+        <code>UNIQUE(quiz_id, student_id)</code> as <code>uq_quiz_assignments_quiz_student</code> &mdash;
+        <code>INDEX(quiz_id, student_id)</code> as <code>ix_quiz_assignments_quiz_student</code>
+      </div>
+    </div>
+  </div>
+
+  <h3>Session management (JWT revocation)</h3>
+
+  <div class="tablecard">
+    <div class="head"><h4>revoked_tokens</h4><span>single-token logout</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>jti</code></td><td>String(64)</td><td><span class="badge uq">unique</span> <span class="badge ix">indexed</span></td></tr>
+        <tr><td><code>subject</code></td><td>String(255)</td><td>usually the user's email, indexed</td></tr>
+        <tr><td><code>revoked_at</code>, <code>expires_at</code></td><td>DateTime</td><td><code>expires_at</code> lets old rows be pruned</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablecard">
+    <div class="head"><h4>user_token_blocks</h4><span>global logout-everywhere marker</span></div>
+    <div class="content">
+      <table class="tbl">
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td><code>id</code></td><td>Integer</td><td><span class="badge pk">PK</span></td></tr>
+        <tr><td><code>user_id</code></td><td>Integer</td><td><span class="badge fk">FK → users.id</span> <span class="badge uq">unique</span> indexed</td></tr>
+        <tr><td><code>revoked_before</code></td><td>DateTime</td><td>any JWT with an earlier <code>iat</code> is rejected</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <footer style="margin-top:48px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px;">All timestamp columns default to <code>datetime.utcnow</code> (standardized repo-wide) so they compare correctly against the UTC-based quiz timer/grace-period logic. See <a href="architecture.html">Architecture</a> for the auth/revocation flow these last two tables support.</footer>
+</main>
+</body>
+</html>

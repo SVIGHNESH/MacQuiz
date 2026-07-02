@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacQuiz Docs - Deployment</title>
+<style>
+  :root{
+    --sidebar:#111827; --text:#1e293b; --muted:#64748b;
+    --accent:#4f46e5; --accent-light:#eef2ff; --border:#e2e8f0;
+    --ok:#16a34a; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7;
+    --code-bg:#0f172a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#f8fafc;display:flex;min-height:100vh;}
+  nav.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  nav.sidebar h1{font-size:16px;color:#fff;margin:0 0 4px;}
+  nav.sidebar .sub{font-size:12px;color:#94a3b8;margin-bottom:24px;}
+  nav.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  nav.sidebar a:hover{background:#1f2937;color:#fff;}
+  nav.sidebar a.active{background:var(--accent);color:#fff;font-weight:600;}
+  main{flex:1;padding:40px 56px;max-width:980px;}
+  h2{font-size:28px;margin-top:0;}
+  h3{margin-top:38px;font-size:19px;color:#111827;border-bottom:1px solid var(--border);padding-bottom:8px;}
+  p{line-height:1.65;color:#334155;}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:.87em;}
+  pre{background:var(--code-bg);color:#e2e8f0;padding:16px 18px;border-radius:10px;overflow-x:auto;font-size:12.5px;line-height:1.55;}
+  pre code{background:none;color:inherit;padding:0;}
+  .steps{list-style:none;padding:0;margin:14px 0;counter-reset:step;}
+  .steps li{position:relative;padding:6px 0 14px 40px;border-left:2px solid var(--border);margin-left:15px;}
+  .steps li:last-child{border-left:2px solid transparent;}
+  .steps li::before{counter-increment:step;content:counter(step);position:absolute;left:-15px;top:0;width:28px;height:28px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok);}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);}
+  details{border:1px solid var(--border);border-radius:10px;margin:12px 0;background:#fff;}
+  summary{padding:13px 16px;cursor:pointer;font-weight:600;font-size:14.5px;list-style:none;}
+  summary::-webkit-details-marker{display:none;}
+  summary::before{content:"\25B8 ";color:var(--accent);}
+  details[open] summary::before{content:"\25BE ";}
+  details .body{padding:0 18px 16px;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <h1>MacQuiz</h1>
+  <div class="sub">Architecture Docs</div>
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="database.html">Database Schema</a>
+  <a href="api.html">API Reference</a>
+  <a href="deployment.html" class="active">Deployment</a>
+  <a href="status.html">instruction.txt Fix Status</a>
+</nav>
+<main>
+  <h2>Deployment</h2>
+  <p>Recommended path: <strong>Vercel</strong> for the static frontend, <strong>Render</strong> for the warm-process backend, <strong>Supabase</strong> for Postgres. This page is a navigable summary; the authoritative step-by-step lives in <code>FREE_HOSTING_GUIDE.md</code> at the repo root &mdash; read that alongside <code>render.yaml</code> if you're actually deploying.</p>
+
+  <h3>1. Supabase Postgres</h3>
+  <p>Create a project, then use the <strong>Transaction Pooler</strong> endpoint (port <code>6543</code>, IPv4) &mdash; not the session pooler:</p>
+  <pre><code>DATABASE_URL=postgresql+psycopg://USER:ENCODED_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require</code></pre>
+  <p>URL-encode special characters in the password (<code>? / + &amp; @ :</code>).</p>
+
+  <h3>2. Backend on Render <span class="badge ok">recommended</span></h3>
+  <ol class="steps">
+    <li>Push the repo to GitHub, then in Render choose <strong>New &rarr; Blueprint</strong> and point it at this repo. Render reads the root <code>render.yaml</code> and proposes the <code>macquiz-backend</code> free web service (<code>rootDir: backend</code>).</li>
+    <li>Before first deploy, set <code>region</code> in <code>render.yaml</code> to whatever Render region is closest to your actual Supabase project region &mdash; this is Lever 2's cross-region latency fix, and <code>oregon</code> in the committed file is a placeholder since no real Supabase region exists in this repo.</li>
+    <li>Fill in every env var marked <code>sync: false</code> in <code>render.yaml</code>: <code>DATABASE_URL</code>, <code>CORS_ORIGINS</code>, <code>ADMIN_EMAIL</code>, <code>ADMIN_PASSWORD</code>, <code>GEMINI_API_KEY</code>. <code>SECRET_KEY</code> is auto-generated for you.</li>
+    <li>Deploy, then run the one-time bootstrap <em>once</em>, from your machine, against the production <code>DATABASE_URL</code> &mdash; the app deliberately does not do this on boot:
+      <pre><code>cd backend
+DATABASE_URL="..." ADMIN_EMAIL="..." ADMIN_PASSWORD="..." python -m app.bootstrap</code></pre>
+      Safe to re-run (idempotent) after adding new model columns.
+    </li>
+    <li>Verify: <code>/health</code> reports <code>"database": "connected"</code>, <code>/docs</code> loads, login works.</li>
+  </ol>
+  <p style="font-size:13px;color:var(--muted);">Render's free web services spin down after 15 minutes idle and cold-restart on the next request &mdash; that only replays the (now DB-free) process boot, not the one-time bootstrap step.</p>
+
+  <details>
+    <summary>render.yaml env vars, in full</summary>
+    <div class="body">
+      <table>
+        <tr><th>Key</th><th>Source</th><th>Notes</th></tr>
+        <tr><td><code>PYTHON_VERSION</code></td><td>pinned <code>3.12.7</code></td><td>Render defaults new services to a newer Python with no prebuilt wheel for pinned <code>psycopg[binary]</code>/<code>pydantic-core</code></td></tr>
+        <tr><td><code>DATABASE_URL</code></td><td>you enter</td><td>Supabase transaction-pooler URL</td></tr>
+        <tr><td><code>SECRET_KEY</code></td><td>auto (<code>generateValue: true</code>)</td><td>JWT signing key</td></tr>
+        <tr><td><code>ALGORITHM</code></td><td><code>HS256</code></td><td></td></tr>
+        <tr><td><code>ACCESS_TOKEN_EXPIRE_MINUTES</code></td><td><code>30</code></td><td></td></tr>
+        <tr><td><code>CORS_ORIGINS</code></td><td>you enter</td><td>your Vercel frontend URL(s), comma-separated</td></tr>
+        <tr><td><code>CORS_ORIGIN_REGEX</code></td><td><code>^https://.*\.vercel\.app$</code></td><td>covers Vercel preview-deploy URLs</td></tr>
+        <tr><td><code>CORS_ALLOW_CREDENTIALS</code></td><td><code>true</code></td><td></td></tr>
+        <tr><td><code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code></td><td>you enter</td><td>seeded once by <code>app.bootstrap</code>, not on every boot</td></tr>
+        <tr><td><code>AI_ENABLED</code></td><td><code>true</code></td><td></td></tr>
+        <tr><td><code>GEMINI_API_KEY</code></td><td>you enter</td><td>optional &mdash; AI endpoints fall back to rule-based generation without it</td></tr>
+        <tr><td><code>GEMINI_MODEL</code></td><td><code>gemini-1.5-flash</code></td><td></td></tr>
+      </table>
+    </div>
+  </details>
+
+  <h3>2b. Alternative: backend on Vercel too <span class="badge warn">not recommended</span></h3>
+  <p><code>backend/vercel.json</code> still exists for this path. Same env vars as above, plus a manually-chosen <code>SECRET_KEY</code> (Render generates one; Vercel doesn't) and an explicit <code>"regions": ["&lt;region&gt;"]</code> key added to <code>backend/vercel.json</code> yourself, since Vercel has no dashboard field for it like Render does. You give up Lever 1's warm-process win on this path &mdash; it exists only for teams that don't want a second host to manage.</p>
+  <p style="font-size:13px;color:var(--muted);">AI endpoints on this path: the backend already self-bounds Gemini calls at 25s/20s with a rule-based fallback, so the real risk is Vercel's function duration limit killing the request before that internal timeout fires. Verify your project's actual Function Max Duration in the Vercel dashboard exceeds ~30s before relying on this path for AI features &mdash; see <a href="status.html">Fix Status</a> item 4.</p>
+
+  <h3>3. Frontend on Vercel</h3>
+  <p><code>frontend/vercel.json</code> is already configured (SPA rewrite to <code>index.html</code>). Set root directory to <code>frontend</code>, then set:</p>
+  <pre><code>VITE_API_BASE_URL=https://your-backend-domain.onrender.com</code></pre>
+
+  <h3>4. Close the CORS loop</h3>
+  <p>Once the frontend's final Vercel URL exists, update the backend's <code>CORS_ORIGINS</code> to include it and redeploy the backend.</p>
+
+  <h3>5. First-login checklist</h3>
+  <ul>
+    <li>Log in with the admin credentials you set.</li>
+    <li>Create one teacher and one student.</li>
+    <li>Create a test quiz and submit one attempt.</li>
+    <li>Confirm data persists after a redeploy.</li>
+  </ul>
+
+  <footer style="margin-top:48px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px;">Full detail (including MySQL as an alternative <code>DATABASE_URL</code>) is in <code>FREE_HOSTING_GUIDE.md</code>. See <a href="status.html">instruction.txt Fix Status</a> for how each lever maps to what's here.</footer>
+</main>
+</body>
+</html>

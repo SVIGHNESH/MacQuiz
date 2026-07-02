@@ -10,6 +10,11 @@ from app.core.config import settings
 connect_args = {}
 if settings.DATABASE_URL.startswith('sqlite'):
     connect_args = {"check_same_thread": False}
+elif settings.DATABASE_URL.startswith('postgresql'):
+    # Supabase's :6543 endpoint is the transaction pooler (PgBouncer transaction mode),
+    # which does not support server-side prepared statements. psycopg3 issues them by
+    # default, causing "prepared statement already exists" errors under concurrency.
+    connect_args = {"prepare_threshold": None}
 
 engine_kwargs = {
     "connect_args": connect_args,

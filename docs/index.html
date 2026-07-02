@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacQuiz Docs - Overview</title>
+<style>
+  :root{
+    --sidebar:#111827; --text:#1e293b; --muted:#64748b;
+    --accent:#4f46e5; --accent-light:#eef2ff; --border:#e2e8f0;
+    --ok:#16a34a; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7; --bad:#b91c1c; --bad-bg:#fee2e2;
+    --code-bg:#0f172a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#f8fafc;display:flex;min-height:100vh;}
+  nav.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  nav.sidebar h1{font-size:16px;color:#fff;margin:0 0 4px;}
+  nav.sidebar .sub{font-size:12px;color:#94a3b8;margin-bottom:24px;}
+  nav.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  nav.sidebar a:hover{background:#1f2937;color:#fff;}
+  nav.sidebar a.active{background:var(--accent);color:#fff;font-weight:600;}
+  main{flex:1;padding:40px 56px;max-width:980px;}
+  h2{font-size:28px;margin-top:0;}
+  h3{margin-top:36px;font-size:19px;color:#111827;}
+  p{line-height:1.65;color:#334155;}
+  .lede{font-size:17px;color:#334155;}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:.9em;}
+  pre{background:var(--code-bg);color:#e2e8f0;padding:16px 18px;border-radius:10px;overflow-x:auto;font-size:13px;line-height:1.5;}
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin:20px 0 8px;}
+  .card{border:1px solid var(--border);background:#fff;border-radius:12px;padding:18px;}
+  .card a{color:var(--accent);font-weight:600;text-decoration:none;font-size:15px;}
+  .card a:hover{text-decoration:underline;}
+  .card p{margin:8px 0 0;font-size:13.5px;color:var(--muted);}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.02em;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok);}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);}
+  .badge.bad{background:var(--bad-bg);color:var(--bad);}
+  .stack{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;}
+  .pill{background:var(--accent-light);color:#3730a3;font-size:13px;padding:5px 12px;border-radius:999px;font-weight:600;}
+  .diagram{border:1px solid var(--border);border-radius:14px;padding:28px;background:#fff;margin:22px 0;}
+  .diagram .row{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;}
+  .box{border:2px solid var(--accent);border-radius:10px;padding:14px 18px;text-align:center;font-size:13.5px;font-weight:600;background:var(--accent-light);min-width:150px;}
+  .box.warm{border-color:var(--ok);background:var(--ok-bg);color:#065f46;}
+  .box.db{border-color:#0891b2;background:#ecfeff;color:#0e7490;}
+  .arrow{font-size:22px;color:var(--muted);}
+  .arrow.down{transform:rotate(90deg);}
+  footer.note{margin-top:56px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <h1>MacQuiz</h1>
+  <div class="sub">Architecture Docs</div>
+  <a href="index.html" class="active">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="database.html">Database Schema</a>
+  <a href="api.html">API Reference</a>
+  <a href="deployment.html">Deployment</a>
+  <a href="status.html">instruction.txt Fix Status</a>
+</nav>
+<main>
+  <h2>MacQuiz</h2>
+  <p class="lede">A quiz management system for admins, teachers, and students: create subjects and a question bank, assemble quizzes with scheduling and marking schemes, run live or self-paced attempts with grace periods, and review analytics afterward.</p>
+
+  <div class="stack">
+    <span class="pill">FastAPI</span>
+    <span class="pill">SQLAlchemy</span>
+    <span class="pill">React 19</span>
+    <span class="pill">Vite 7</span>
+    <span class="pill">Tailwind 4</span>
+    <span class="pill">Supabase Postgres</span>
+    <span class="pill">JWT auth</span>
+  </div>
+
+  <h3>Hosting shape</h3>
+  <p>The frontend is a static React SPA on Vercel. The backend is a FastAPI app intended to run as an always-warm process (Render free web service) rather than Vercel serverless functions &mdash; see <a href="architecture.html">Architecture</a> for why that distinction matters for this app's peak load (a class hitting <code>POST /attempts/start</code> in the same second).</p>
+
+  <div class="diagram">
+    <div class="row">
+      <div class="box">Browser<br>React 19 SPA</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box warm">Backend<br>FastAPI, warm process<br>(Render free web service)</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box db">Supabase<br>Postgres<br>(PgBouncer :6543)</div>
+    </div>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:18px;">Static frontend on Vercel &middot; warm backend on Render &middot; managed Postgres on Supabase. See <a href="deployment.html">Deployment</a> for the exact files.</p>
+  </div>
+
+  <h3>Where to go next</h3>
+  <div class="card-grid">
+    <div class="card">
+      <a href="architecture.html">Architecture &rarr;</a>
+      <p>Request flow, middleware stack, auth/JWT revocation, and why the hosting model was the biggest lever.</p>
+    </div>
+    <div class="card">
+      <a href="database.html">Database Schema &rarr;</a>
+      <p>Every table, column, foreign key, unique constraint and index actually defined in <code>models.py</code>.</p>
+    </div>
+    <div class="card">
+      <a href="api.html">API Reference &rarr;</a>
+      <p>All 68 routes across 7 routers, searchable and filterable by method and router.</p>
+    </div>
+    <div class="card">
+      <a href="deployment.html">Deployment &rarr;</a>
+      <p>How to actually stand this up on Vercel + Render's free tiers, env var by env var.</p>
+    </div>
+    <div class="card">
+      <a href="status.html">instruction.txt Fix Status &rarr;</a>
+      <p>Every lever and numbered issue from the review, mapped honestly to fixed / mitigated / still-outstanding.</p>
+    </div>
+  </div>
+
+  <footer class="note">Generated as a static, dependency-free doc set &mdash; open any file directly in a browser, no server or build step required. Content reflects the codebase as of this iteration; re-generate if the schema or routes change materially.</footer>
+</main>
+</body>
+</html>

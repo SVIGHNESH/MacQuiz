@@ -18,7 +18,8 @@ TYPE_LENGTH = 50
 TOPIC_LENGTH = 200
 DIFFICULTY_LENGTH = 20
 
-# Using datetime.now() for all timestamps to use local timezone
+# All timestamps use datetime.utcnow() so stored values are consistently UTC-naive,
+# matching the quiz-timer, token, and scheduling comparisons elsewhere in the app.
 
 class User(Base):
     __tablename__ = "users"
@@ -30,8 +31,8 @@ class User(Base):
     last_name = Column(String(NAME_LENGTH), nullable=False)
     role = Column(String(ROLE_LENGTH), nullable=False)  # 'admin', 'teacher', 'student'
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.now)
-    last_active = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.utcnow)
     
     # Student specific fields
     student_id = Column(String(ID_LENGTH), unique=True, nullable=True, index=True)
@@ -74,9 +75,9 @@ class Quiz(Base):
     
     # Status
     is_active = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     # Relationships
     creator = relationship("User", back_populates="quizzes_created", foreign_keys=[creator_id])
     subject = relationship("Subject", back_populates="quizzes")
@@ -164,8 +165,8 @@ class Subject(Base):
     department = Column(String(DEPARTMENT_LENGTH), nullable=True)
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.now)
-    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
     # Relationships
     creator = relationship("User", back_populates="subjects_created")
     quizzes = relationship("Quiz", back_populates="subject")
@@ -198,9 +199,9 @@ class QuestionBank(Base):
     # Metadata
     times_used = Column(Integer, default=0)  # How many times used in quizzes
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     # Relationships
     subject = relationship("Subject", back_populates="question_bank")
     creator = relationship("User", back_populates="questions_created")
@@ -218,7 +219,7 @@ class QuizAssignment(Base):
     id = Column(Integer, primary_key=True, index=True)
     quiz_id = Column(Integer, ForeignKey("quizzes.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    assigned_at = Column(DateTime, default=datetime.now)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     quiz = relationship("Quiz", backref="assignments")

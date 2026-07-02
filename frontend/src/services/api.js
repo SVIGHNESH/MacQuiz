@@ -1,13 +1,5 @@
 // Normalize API base URL and tolerate accidental comma-separated values in env.
 function resolveApiBaseUrl() {
-    if (!import.meta.env.DEV && typeof window !== 'undefined') {
-        const host = (window.location?.hostname || '').toLowerCase();
-        // On custom production frontend domain, prefer same-origin + Vercel rewrite proxy.
-        if (host === 'mac-quiz.vercel.app') {
-            return window.location.origin;
-        }
-    }
-
     const envValue = import.meta.env.VITE_API_BASE_URL;
     if (!envValue) {
         if (import.meta.env.DEV) {
@@ -314,6 +306,28 @@ async function fetchAPI(endpoint, options = {}) {
     }
 }
 
+// Pages through a paginated list endpoint (skip/limit query params, bare-array response)
+// until a short page confirms there's nothing left, so callers keep getting the
+// full matching set even past the endpoint's single-request cap (currently 300).
+async function fetchAllPaginated(path, params = {}) {
+    const pageSize = params.limit ?? 300;
+    let skip = 0;
+    let all = [];
+
+    while (true) {
+        const query = new URLSearchParams(
+            Object.entries({ ...params, skip, limit: pageSize })
+                .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        ).toString();
+        const page = await fetchAPI(`${path}?${query}`);
+        all = all.concat(page);
+        if (page.length < pageSize) break;
+        skip += page.length;
+    }
+
+    return all;
+}
+
 export const authAPI = {
     login: async (email, password) => {
         const formData = new URLSearchParams();
@@ -361,7 +375,7 @@ export const userAPI = {
         method: 'PUT',
         body: JSON.stringify(userData),
     }),
-    getAllUsers: () => fetchAPI('/api/v1/users/'),
+    getAllUsers: (params = {}) => fetchAllPaginated('/api/v1/users/', params),
     getUser: (id) => fetchAPI(`/api/v1/users/${id}`),
     createUser: (userData) => fetchAPI('/api/v1/users/', {
         method: 'POST',
@@ -394,7 +408,7 @@ export const userAPI = {
 };
 
 export const quizAPI = {
-    getAllQuizzes: () => fetchAPI('/api/v1/quizzes/'),
+    getAllQuizzes: (params = {}) => fetchAllPaginated('/api/v1/quizzes/', params),
     getQuiz: (id) => fetchAPI(`/api/v1/quizzes/${id}`, { skipCache: true }),
     checkEligibility: (id) => fetchAPI(`/api/v1/quizzes/${id}/eligibility`, { skipCache: true }),
     createQuiz: (quizData) => fetchAPI('/api/v1/quizzes/', {
@@ -578,6 +592,10 @@ export const questionBankAPI = {
     deleteQuestion: (id) => fetchAPI(`/api/v1/question-bank/${id}`, {
         method: 'DELETE',
     }),
+    // 120s gives Gemini generous headroom; the backend's own call times out at 25s with a
+    // rule-based fallback (see backend/app/api/v1/question_bank.py). Safe on Render (no cap).
+    // On the Vercel fallback path, verify the project's function max duration exceeds ~30s
+    // or Vercel can kill the request before that internal fallback fires - see FREE_HOSTING_GUIDE.md 2b.
     generateQuestions: (payload) => fetchAPI('/api/v1/question-bank/ai/generate', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -599,6 +617,7 @@ export const analyticsAPI = {
     },
     getSubjectPerformance: (subjectId) => fetchAPI(`/api/v1/analytics/performance/subject/${subjectId}`),
     getDepartmentPerformance: (department) => fetchAPI(`/api/v1/analytics/performance/department/${department}`),
+    // See the comment on questionBankAPI.generateQuestions - same 120s/25s-internal-timeout rationale.
     getAIInsights: (payload = {}) => fetchAPI('/api/v1/analytics/reports/ai-insights', {
         method: 'POST',
         body: JSON.stringify(payload),

@@ -3,86 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import logging
-from sqlalchemy import inspect, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from app.core.config import settings
-from app.db.database import engine, Base, SessionLocal
-from app.models.models import User
-from app.core.security import get_password_hash, verify_password
+from app.db.database import engine
 from app.api.v1 import auth, users, quizzes, attempts, subjects, question_bank, analytics
 
 logger = logging.getLogger(__name__)
 
 
-def ensure_user_profile_image_column() -> None:
-    """Best-effort schema compatibility for existing databases."""
-    inspector = inspect(engine)
-    user_columns = {col["name"] for col in inspector.get_columns("users")}
-    if "profile_image" in user_columns:
-        return
-
-    with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE users ADD COLUMN profile_image TEXT"))
-
-def init_admin() -> None:
-    """Create the initial admin user if it doesn't exist.
-
-    This should run during startup, not at import time.
-    """
-    admin_email = (settings.ADMIN_EMAIL or "").strip()
-    admin_password = (settings.ADMIN_PASSWORD or "").strip()
-
-    if not admin_email or not admin_password:
-        print("ℹ️  ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping admin bootstrap")
-        return
-
-    db = SessionLocal()
-    try:
-        admin_exists = db.query(User).filter(User.email == admin_email).first()
-        if admin_exists:
-            # Keep env credentials as the recovery source of truth for admin access.
-            if not verify_password(admin_password, admin_exists.hashed_password):
-                admin_exists.hashed_password = get_password_hash(admin_password)
-                admin_exists.is_active = True
-                db.commit()
-                print("✅ Admin password synchronized from environment")
-            else:
-                print("ℹ️  Admin user already exists")
-            return
-
-        admin_user = User(
-            email=admin_email,
-            hashed_password=get_password_hash(admin_password),
-            first_name="Admin",
-            last_name="User",
-            role="admin",
-            is_active=True,
-        )
-        db.add(admin_user)
-        try:
-            db.commit()
-            print(f"✅ Admin user created: {admin_email}")
-        except IntegrityError:
-            # Another startup instance may create admin concurrently; ignore duplicate.
-            db.rollback()
-            print("ℹ️  Admin user already exists (detected during commit)")
-    finally:
-        db.close()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    app.state.db_startup_ok = True
-    app.state.db_startup_error = None
-    try:
-        Base.metadata.create_all(bind=engine)
-        ensure_user_profile_image_column()
-        init_admin()
-    except Exception as error:
-        app.state.db_startup_ok = False
-        app.state.db_startup_error = str(error)
-        logger.exception("Database startup/bootstrap failed")
+    # Schema creation and admin-user seeding are one-time deploy steps, not
+    # per-boot work - run `python -m app.bootstrap` once per deploy instead.
+    # Serverless cold starts should not pay for DB round-trips before the
+    # first request; local dev/prod schema is expected to already exist.
     yield
     # Shutdown (nothing to do)
 
@@ -153,9 +87,19 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    # Checked live (not at boot) so this reflects current DB reachability
+    # without requiring the app to touch the DB on every cold start.
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        database_status = "connected"
+    except Exception:
+        # Don't leak connection details (host, credentials) to callers of this public endpoint.
+        logger.exception("Health check DB probe failed")
+        database_status = "unavailable"
+
     return {
-        "status": "healthy" if getattr(app.state, "db_startup_ok", True) else "degraded",
+        "status": "healthy" if database_status == "connected" else "degraded",
         "version": "2.0.0",
-        "database": "connected" if getattr(app.state, "db_startup_ok", True) else "unavailable",
-        "startup_error": getattr(app.state, "db_startup_error", None),
+        "database": database_status,
     }

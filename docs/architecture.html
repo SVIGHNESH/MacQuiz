@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacQuiz Docs - Architecture</title>
+<style>
+  :root{
+    --sidebar:#111827; --text:#1e293b; --muted:#64748b;
+    --accent:#4f46e5; --accent-light:#eef2ff; --border:#e2e8f0;
+    --ok:#16a34a; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7; --bad:#b91c1c; --bad-bg:#fee2e2;
+    --code-bg:#0f172a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#f8fafc;display:flex;min-height:100vh;}
+  nav.sidebar{width:230px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  nav.sidebar h1{font-size:16px;color:#fff;margin:0 0 4px;}
+  nav.sidebar .sub{font-size:12px;color:#94a3b8;margin-bottom:24px;}
+  nav.sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:9px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  nav.sidebar a:hover{background:#1f2937;color:#fff;}
+  nav.sidebar a.active{background:var(--accent);color:#fff;font-weight:600;}
+  main{flex:1;padding:40px 56px;max-width:980px;}
+  h2{font-size:28px;margin-top:0;}
+  h3{margin-top:40px;font-size:19px;color:#111827;border-bottom:1px solid var(--border);padding-bottom:8px;}
+  h4{font-size:15px;margin:20px 0 6px;}
+  p{line-height:1.65;color:#334155;}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:.9em;}
+  pre{background:var(--code-bg);color:#e2e8f0;padding:16px 18px;border-radius:10px;overflow-x:auto;font-size:13px;line-height:1.5;}
+  pre code{background:none;color:inherit;padding:0;}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.02em;margin-left:8px;vertical-align:middle;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok);}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);}
+  .badge.bad{background:var(--bad-bg);color:var(--bad);}
+  details{border:1px solid var(--border);border-radius:10px;margin:12px 0;background:#fff;}
+  summary{padding:13px 16px;cursor:pointer;font-weight:600;font-size:14.5px;list-style:none;display:flex;align-items:center;gap:10px;}
+  summary::-webkit-details-marker{display:none;}
+  summary::before{content:"\25B8";color:var(--accent);transition:transform .15s;}
+  details[open] summary::before{transform:rotate(90deg);}
+  details .body{padding:0 18px 16px;}
+  .diagram{border:1px solid var(--border);border-radius:14px;padding:22px;background:#fff;margin:18px 0;overflow-x:auto;}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;}
+  .box{border:2px solid var(--accent);border-radius:8px;padding:10px 14px;text-align:center;font-weight:600;background:var(--accent-light);}
+  .arrow{color:var(--muted);font-size:18px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;}
+  ul{line-height:1.7;color:#334155;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <h1>MacQuiz</h1>
+  <div class="sub">Architecture Docs</div>
+  <a href="index.html">Overview</a>
+  <a href="architecture.html" class="active">Architecture</a>
+  <a href="database.html">Database Schema</a>
+  <a href="api.html">API Reference</a>
+  <a href="deployment.html">Deployment</a>
+  <a href="status.html">instruction.txt Fix Status</a>
+</nav>
+<main>
+  <h2>Architecture</h2>
+  <p>Click a section to expand it. Each section maps to a concrete file in the repo &mdash; line numbers/paths are given so you can jump straight to source.</p>
+
+  <h3>1. Request path, end to end</h3>
+  <div class="diagram">
+    <div class="flow">
+      <div class="box">React SPA<br><small>fetch()</small></div>
+      <span class="arrow">&#8594;</span>
+      <div class="box">CORS<br>middleware</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box">GZip<br>middleware</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box">Security<br>headers</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box">Router<br>(v1 API)</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box">SQLAlchemy<br>engine</div>
+      <span class="arrow">&#8594;</span>
+      <div class="box">Supabase<br>Postgres</div>
+    </div>
+  </div>
+  <p>Defined in <code>backend/app/main.py</code>. Every response gets <code>X-Content-Type-Options</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy</code>, and a locked-down <code>Permissions-Policy</code> via a custom <code>@app.middleware("http")</code> hook (lines 46-56). Responses over 1&nbsp;KB are gzip-compressed (line 43) &mdash; this matters most for the attempt lists and analytics payloads.</p>
+
+  <details>
+    <summary>Routers &amp; prefixes <span class="badge ok">7 routers</span></summary>
+    <div class="body">
+      <table>
+        <tr><th>Router</th><th>Prefix</th><th>Tag</th></tr>
+        <tr><td><code>auth.py</code></td><td><code>/api/v1/auth</code></td><td>Authentication</td></tr>
+        <tr><td><code>users.py</code></td><td><code>/api/v1/users</code></td><td>Users</td></tr>
+        <tr><td><code>subjects.py</code></td><td><code>/api/v1/subjects</code></td><td>Subjects</td></tr>
+        <tr><td><code>question_bank.py</code></td><td><code>/api/v1/question-bank</code></td><td>Question Bank</td></tr>
+        <tr><td><code>quizzes.py</code></td><td><code>/api/v1/quizzes</code></td><td>Quizzes</td></tr>
+        <tr><td><code>attempts.py</code></td><td><code>/api/v1/attempts</code></td><td>Quiz Attempts</td></tr>
+        <tr><td><code>analytics.py</code></td><td><code>/api/v1/analytics</code></td><td>Analytics &amp; Reports</td></tr>
+      </table>
+      <p>Full endpoint-by-endpoint list is on the <a href="api.html">API Reference</a> page.</p>
+    </div>
+  </details>
+
+  <h3>2. Auth &amp; JWT revocation</h3>
+  <p><code>backend/app/api/v1/auth.py</code> issues JWTs on <code>/login</code> / <code>/login-json</code>. Revocation is handled by two small tables rather than a stateful session store:</p>
+  <ul>
+    <li><code>revoked_tokens</code> &mdash; stores a token's <code>jti</code> until it would have expired naturally (single-token logout, <code>/logout</code>).</li>
+    <li><code>user_token_blocks</code> &mdash; one row per user holding <code>revoked_before</code>; any token with an earlier <code>iat</code> is rejected globally (<code>/logout-all</code>, password change). This is O(1) regardless of how many tokens a user has issued, instead of enumerating and blacklisting every outstanding token.</li>
+  </ul>
+
+  <h3>3. Hosting model &mdash; the biggest lever</h3>
+  <p>Vercel Python functions are stateless: no warm process, no warm connection pool. Bursty traffic (a class opening a live quiz at the same second, hammering <code>POST /attempts/start</code>) spins up many cold containers, each paying cold-start <em>and</em> a fresh Postgres handshake. The fix applied here is architectural, not a code tweak: run the backend as a single always-warm process.</p>
+  <details>
+    <summary>Resolution <span class="badge ok">done</span> &mdash; Render free web service</summary>
+    <div class="body">
+      <p><code>render.yaml</code> (repo root) defines a <code>runtime: python</code> web service on Render's free plan, started with <code>uvicorn app.main:app --host 0.0.0.0 --port $PORT</code> &mdash; a long-lived process, not a per-request function. Frontend stays on Vercel as a static build. See <a href="deployment.html">Deployment</a> for the full setup and required env vars.</p>
+    </div>
+  </details>
+
+  <h3>4. Database connection strategy</h3>
+  <p><code>backend/app/db/database.py</code> branches connection behavior by host, not by a single hardcoded assumption:</p>
+  <pre><code>if os.getenv('VERCEL') or os.getenv('SERVERLESS'):
+    engine_kwargs["poolclass"] = NullPool   # no pooling across stateless invocations
+</code></pre>
+  <p>Independently of that, <strong>any</strong> Postgres URL gets <code>connect_args = {"prepare_threshold": None}</code> (not gated behind the Vercel check) because it fixes a different problem: Supabase's <code>:6543</code> endpoint is the PgBouncer <strong>transaction</strong> pooler, which does not support server-side prepared statements. psycopg3 issues them by default, causing <code>"prepared statement already exists"</code> errors under concurrency &mdash; exactly the concurrent-quiz scenario this app needs to survive. On Render (no <code>VERCEL</code>/<code>SERVERLESS</code> env var set), the engine keeps SQLAlchemy's default pooled <code>QueuePool</code>, giving a real warm connection pool for free.</p>
+
+  <h3>5. Startup / bootstrap</h3>
+  <p>The FastAPI <code>lifespan</code> in <code>main.py</code> is now a no-op. Schema creation and admin-user seeding live in <code>backend/app/bootstrap.py</code>, run once per deploy via <code>python -m app.bootstrap</code> (idempotent &mdash; safe to re-run). <code>/health</code> does a live <code>SELECT 1</code> probe on each call instead of reporting a boot-time flag, so it reflects current DB reachability without the app touching the DB during cold start.</p>
+
+  <h3>6. Frontend delivery</h3>
+  <p><code>frontend/src/App.jsx</code> lazy-loads the admin-only routes with <code>React.lazy()</code> + <code>Suspense</code> (<code>AdminDashboard</code>, <code>QuizCreator</code>, <code>QuizTaker</code>, <code>QuizResult</code>); only <code>Login</code> is statically imported since every visitor needs it. <code>vite.config.js</code> splits <code>react</code>/<code>react-dom</code>/<code>react-router-dom</code> and <code>lucide-react</code> into separate cacheable vendor chunks via <code>build.rollupOptions.output.manualChunks</code>. A student opening the login page no longer downloads the multi-thousand-line admin dashboard bundle.</p>
+
+  <h3>7. Analytics query shape</h3>
+  <p><code>backend/app/api/v1/analytics.py</code>'s <code>get_dashboard_stats</code> uses <code>func.count(col).filter(...)</code> aggregate columns (SQL <code>FILTER (WHERE ...)</code>) to compute paired total/active metrics in a handful of round trips instead of one sequential <code>.count()</code> per metric, wrapped in a 45s in-process TTL cache. <code>get_recent_activity</code> is a single 3-table join (<code>QuizAttempt</code> + <code>User</code> + <code>Quiz</code>) instead of one query per attempt in a loop.</p>
+
+  <h3>8. List endpoint pagination &amp; filtering</h3>
+  <p><code>get_all_users</code> and <code>get_all_quizzes</code> accept <code>role</code>/<code>department</code>/<code>search</code> query params and validated <code>skip</code>/<code>limit</code> bounds, so large orgs don't get an entire table shipped to the browser for client-side filtering. See <a href="status.html">Fix Status</a> for exactly which frontend views were wired to pass these down versus left as future work.</p>
+
+  <footer style="margin-top:48px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px;">Cross-reference: <a href="status.html">instruction.txt Fix Status</a> maps every item above back to the exact lever/paragraph that raised it.</footer>
+</main>
+</body>
+</html>
