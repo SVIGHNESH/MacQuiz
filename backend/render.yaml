@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: macquiz-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    # Pick the Render region closest to your Supabase project's region
+    # (see Lever 2 in instruction.txt: cross-region DB round-trips are
+    # the single biggest avoidable latency cost on the dashboard queries).
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    # Runs as a single always-warm process (Render's paid-parity free web
+    # service model) instead of Vercel's per-request cold container, so
+    # this gets a real pooled SQLAlchemy QueuePool for free - see
+    # app/db/database.py, which only forces NullPool when VERCEL/SERVERLESS
+    # is set, and Render sets neither.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # requirements.txt pins psycopg[binary]==3.2.3 and pydantic-core (via
+      # pydantic==2.9.2), neither of which ships a prebuilt wheel for Python
+      # 3.14 (Render's default for new services); pin to a version both have
+      # wheels for so the build doesn't fall back to a source compile/fail.
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ORIGIN_REGEX
+        value: ^https://.*\.vercel\.app$
+      - key: CORS_ALLOW_CREDENTIALS
+        value: "true"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: AI_ENABLED
+        value: "true"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+
