@@ -57,7 +57,7 @@ dmypy.json
 cython_debug/
 
 # pyenv / pipenv / poetry / pdm
-.python-version
+#.python-version
 Pipfile.lock
 poetry.lock
 .pdm.toml
